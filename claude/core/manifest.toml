@@ -1,0 +1,11 @@
+[pack]
+name = "core"
+description = "Layer 0: Self-modification sandbox — commands, agents, hooks for managing your AI coding tools"
+version = "1.0.0"
+
+[claude]
+settings = "settings.json"
+hooks = "hooks"
+
+[extras]
+environment_d = "environment.d"

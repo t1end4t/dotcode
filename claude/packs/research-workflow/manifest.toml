@@ -1,0 +1,7 @@
+[pack]
+name = "research-workflow"
+description = "Find, search, cite, and verify academic papers across multiple databases"
+version = "1.0.0"
+
+[claude]
+skills = "skills"

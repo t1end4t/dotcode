@@ -1,0 +1,7 @@
+[pack]
+name = "deep-learning"
+description = "Train and scale neural networks with Transformers, PyTorch Lightning, and GPU acceleration"
+version = "1.0.0"
+
+[claude]
+skills = "skills"
