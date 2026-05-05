@@ -1,0 +1,7 @@
+[pack]
+name = "scientific-writing"
+description = "Write, review, and format scientific manuscripts for publication"
+version = "1.0.0"
+
+[claude]
+skills = "skills"

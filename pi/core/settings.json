@@ -1,0 +1,15 @@
+{
+  "defaultProvider": "llama-cpp",
+  "defaultModel": "qwen3.6-35b-a3b",
+  "defaultThinkingLevel": "medium",
+  "enableInstallTelemetry": false,
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
+  },
+  "retry": {
+    "enabled": true,
+    "maxRetries": 3
+  }
+}

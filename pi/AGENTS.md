@@ -1,0 +1,42 @@
+# Pi Coding Agent Config — Inventory
+
+What is already configured in this distribution. Read before adding or changing anything.
+
+## Core (`core/`)
+
+**Global instructions** — `core/global-instructions.md` → installed as `~/.pi/agent/AGENTS.md`
+**Harness settings** — `core/settings.json` → installed as `~/.pi/agent/settings.json`
+**Local model config** — `core/models.json` → installed as `~/.pi/agent/models.json`
+
+No hooks, MCP, plugins, prompts, or skills configured yet.
+
+## Local LLM
+
+Configured provider:
+
+- **llama-cpp** — OpenAI-compatible local endpoint at `http://localhost:8080/v1`
+
+Configured model:
+
+- **qwen3.6-35b-a3b** — Qwen3.6 35B A3B local model alias
+
+Expected local runtime:
+
+```bash
+llama-server \
+  --model /path/to/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf \
+  --port 8080 \
+  --alias qwen3.6-35b-a3b \
+  -c 65536 \
+  -n 32768 \
+  -fa on \
+  -ctk q8_0 -ctv q8_0 \
+  --chat-template-kwargs '{"preserve_thinking": true}'
+```
+
+## Install
+
+```bash
+./install.sh --core                  # Core only
+./install.sh --list                  # Show available packs (none yet)
+```

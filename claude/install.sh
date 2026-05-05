@@ -25,9 +25,10 @@ copy_dir() {
   for f in "$src"/*; do [ -e "$f" ] && has_files=true && break; done
   $has_files || return 0
 
+  rm -rf "$dst"
   mkdir -p "$dst"
   cp -r "$src"/* "$dst"/
-  echo -e "  ✅  ${GREEN}${label}${RESET}"
+  echo -e "  ✅  ${GREEN}${label}${RESET} ${DIM}(synced)${RESET}"
   COUNT=$((COUNT + 1))
 }
 
@@ -81,7 +82,7 @@ install_core() {
   if [ -d "$core" ]; then
     echo -e "  ${CYAN}claude${RESET}"
     copy_dir  "$core/hooks"     "$CLAUDE_HOME/hooks"     "~/.claude/hooks/"
-    merge_json "$core/settings.json" "$CLAUDE_HOME/settings.json" "~/.claude/settings.json"
+    copy_file "$core/settings.json" "$CLAUDE_HOME/settings.json" "~/.claude/settings.json"
     copy_file "$core/global-instructions.md" "$CLAUDE_HOME/CLAUDE.md" "~/.claude/CLAUDE.md"
     # Make hooks executable
     chmod +x "$CLAUDE_HOME/hooks/"*.sh 2>/dev/null || true
@@ -89,6 +90,7 @@ install_core() {
     # Core skills
     if [ -d "$core/skills" ]; then
       mkdir -p "$CLAUDE_HOME/skills"
+      find "$CLAUDE_HOME/skills" -mindepth 1 -maxdepth 1 -type d ! -name '*:*' -exec rm -rf {} +
       for skill_dir in "$core/skills"/*/; do
         [ -f "$skill_dir/SKILL.md" ] || continue
         local skill_name=$(basename "$skill_dir")
@@ -163,6 +165,7 @@ install_pack() {
   # Skills (use pack:skill naming so invoke is /pack:skill not /pack/skill)
   if [ -d "$pack_dir/skills" ]; then
     mkdir -p "$CLAUDE_HOME/skills"
+    rm -rf "$CLAUDE_HOME/skills/${pack_name}:"*
     for skill_dir in "$pack_dir/skills"/*/; do
       [ -d "$skill_dir" ] || continue
       local skill_name=$(basename "$skill_dir")

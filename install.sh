@@ -19,6 +19,7 @@ usage() {
   echo "Usage:"
   echo "  ./install.sh --codex --core"
   echo "  ./install.sh --claude --core"
+  echo "  ./install.sh --pi --core"
   echo "  ./install.sh --codex --claude --pack=NAME"
   echo "  ./install.sh --all-agents --all"
   echo "  ./install.sh --codex --list"
@@ -26,6 +27,7 @@ usage() {
   echo "Agents:"
   echo "  --codex       Target Codex CLI (~/.codex)"
   echo "  --claude      Target Claude Code (~/.claude)"
+  echo "  --pi          Target Pi Coding Agent (~/.pi/agent)"
   echo "  --all-agents  Target every supported agent"
   echo ""
   echo "Options passed through to agent installers:"
@@ -50,9 +52,11 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --codex) add_agent "codex" ;;
     --claude) add_agent "claude" ;;
+    --pi) add_agent "pi" ;;
     --all-agents)
       add_agent "codex"
       add_agent "claude"
+      add_agent "pi"
       ;;
     -h|--help)
       usage
@@ -64,7 +68,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ ${#AGENTS[@]} -eq 0 ]; then
-  echo -e "${RED}No agent selected.${RESET} Use --codex, --claude, or --all-agents."
+  echo -e "${RED}No agent selected.${RESET} Use --codex, --claude, --pi, or --all-agents."
   echo ""
   usage
   exit 1
