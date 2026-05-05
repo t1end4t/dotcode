@@ -5,8 +5,9 @@ Shared config home for coding agents.
 ## Structure
 
 ```text
-codex/   # Codex CLI config, same shape as dotcodex
-claude/  # Claude Code config, same shape as dotclaude
+claude/       # Claude Code config → ~/.claude/
+codex/        # Codex CLI config   → ~/.codex/
+../external/  # Reference repos (submodules, outside this repo)
 ```
 
 Future agents can be added beside these folders, e.g. `opencode/` or `pi/`.

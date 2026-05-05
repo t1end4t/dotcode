@@ -51,8 +51,8 @@ uninstall_core() {
   fi
 
   # External submodule path pointers
-  if [ -d "$SCRIPT_DIR/external" ]; then
-    for ext_dir in "$SCRIPT_DIR/external"/*/; do
+  if [ -d "$SCRIPT_DIR/../external" ]; then
+    for ext_dir in "$SCRIPT_DIR/../external"/*/; do
       [ -d "$ext_dir" ] || continue
       local ext_name=$(basename "$ext_dir")
       remove_if_exists "$CODEX_HOME/${ext_name}-path" "~/.codex/${ext_name}-path"

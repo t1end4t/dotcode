@@ -40,12 +40,11 @@ uninstall_core() {
 
   remove_if_exists "$CLAUDE_HOME/settings.json" "~/.claude/settings.json"
   remove_if_exists "$CLAUDE_HOME/CLAUDE.md" "~/.claude/CLAUDE.md"
-  remove_if_exists "$CLAUDE_HOME/CLAUDE-TOKEN-EFFICIENT.md" "~/.claude/CLAUDE-TOKEN-EFFICIENT.md"
   remove_if_exists "$CLAUDE_HOME/guide-path" "~/.claude/guide-path"
 
   # External submodule path pointers
-  if [ -d "$SCRIPT_DIR/external" ]; then
-    for ext_dir in "$SCRIPT_DIR/external"/*/; do
+  if [ -d "$SCRIPT_DIR/../external" ]; then
+    for ext_dir in "$SCRIPT_DIR/../external"/*/; do
       [ -d "$ext_dir" ] || continue
       local ext_name=$(basename "$ext_dir")
       remove_if_exists "$CLAUDE_HOME/${ext_name}-path" "~/.claude/${ext_name}-path"

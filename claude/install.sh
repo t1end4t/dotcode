@@ -82,8 +82,7 @@ install_core() {
     echo -e "  ${CYAN}claude${RESET}"
     copy_dir  "$core/hooks"     "$CLAUDE_HOME/hooks"     "~/.claude/hooks/"
     merge_json "$core/settings.json" "$CLAUDE_HOME/settings.json" "~/.claude/settings.json"
-    copy_file "$core/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md" "~/.claude/CLAUDE.md"
-    copy_file "$core/CLAUDE-TOKEN-EFFICIENT.md" "$CLAUDE_HOME/CLAUDE-TOKEN-EFFICIENT.md" "~/.claude/CLAUDE-TOKEN-EFFICIENT.md"
+    copy_file "$core/global-instructions.md" "$CLAUDE_HOME/CLAUDE.md" "~/.claude/CLAUDE.md"
     # Make hooks executable
     chmod +x "$CLAUDE_HOME/hooks/"*.sh 2>/dev/null || true
 
@@ -126,8 +125,8 @@ install_core() {
   fi
 
   # External submodule path pointers (read-only references, not installed)
-  if [ -d "$SCRIPT_DIR/external" ]; then
-    for ext_dir in "$SCRIPT_DIR/external"/*/; do
+  if [ -d "$SCRIPT_DIR/../external" ]; then
+    for ext_dir in "$SCRIPT_DIR/../external"/*/; do
       [ -d "$ext_dir" ] || continue
       local ext_name=$(basename "$ext_dir")
       echo "$ext_dir" > "$CLAUDE_HOME/${ext_name}-path"

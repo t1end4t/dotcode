@@ -51,7 +51,7 @@ install_core() {
 
   echo -e "  ${CYAN}codex${RESET}"
 
-  copy_file "$core/AGENTS.md"     "$CODEX_HOME/AGENTS.md"     "~/.codex/AGENTS.md"
+  copy_file "$core/global-instructions.md" "$CODEX_HOME/AGENTS.md" "~/.codex/AGENTS.md"
   copy_file "$core/config.toml"   "$CODEX_HOME/config.toml"   "~/.codex/config.toml"
   copy_dir  "$core/hooks"         "$CODEX_HOME/hooks"         "~/.codex/hooks/"
   chmod +x "$CODEX_HOME/hooks/"*.sh 2>/dev/null || true
@@ -70,8 +70,8 @@ install_core() {
   fi
 
   # External submodule path pointers (read-only references, not installed)
-  if [ -d "$SCRIPT_DIR/external" ]; then
-    for ext_dir in "$SCRIPT_DIR/external"/*/; do
+  if [ -d "$SCRIPT_DIR/../external" ]; then
+    for ext_dir in "$SCRIPT_DIR/../external"/*/; do
       [ -d "$ext_dir" ] || continue
       local ext_name=$(basename "$ext_dir")
       echo "$ext_dir" > "$CODEX_HOME/${ext_name}-path"
