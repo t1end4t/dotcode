@@ -77,7 +77,8 @@ install_core() {
 install_pack() {
   local pack_name="$1"
   local pack_dir="$SCRIPT_DIR/packs/$pack_name"
-
+  # Fall back to codex packs if pi has no local packs
+  [ -d "$pack_dir" ] || pack_dir="$SCRIPT_DIR/../codex/packs/$pack_name"
   if [ ! -d "$pack_dir" ]; then
     echo -e "  ${RED}Pack '$pack_name' not found${RESET}"
     return 1
@@ -96,15 +97,18 @@ install_pack() {
 
   if [ -d "$pack_dir/skills" ]; then
     mkdir -p "$PI_HOME/skills"
-    rm -rf "$PI_HOME/skills/${pack_name}:"*
     for skill_dir in "$pack_dir/skills"/*/; do
       [ -d "$skill_dir" ] || continue
       local skill_name=$(basename "$skill_dir")
       [ -f "$skill_dir/SKILL.md" ] || continue
-      local dest="$PI_HOME/skills/${pack_name}:${skill_name}"
+      local dest="$PI_HOME/skills/${skill_name}"
       rm -rf "$dest"
       cp -r "$skill_dir" "$dest"
-      echo -e "  ✅  ${GREEN}~/.pi/agent/skills/${pack_name}:${skill_name}/${RESET}"
+      # Rewrite frontmatter name to drop pack prefix (Pi requires name = dir name)
+      if [ -f "$dest/SKILL.md" ]; then
+        sed -i "s/^name: ${pack_name}:${skill_name}$/name: ${skill_name}/" "$dest/SKILL.md"
+      fi
+      echo -e "  ✅  ${GREEN}~/.pi/agent/skills/${skill_name}/${RESET}"
       COUNT=$((COUNT + 1))
     done
   fi
@@ -122,8 +126,10 @@ install_pack() {
 list_packs() {
   echo -e "${BOLD}Available packs:${RESET}"
   echo ""
-  [ -d "$SCRIPT_DIR/packs" ] || { echo -e "  ${DIM}(none)${RESET}"; echo ""; return 0; }
-  for pack_dir in "$SCRIPT_DIR/packs"/*/; do
+  local packs_dir="$SCRIPT_DIR/packs"
+  [ -d "$packs_dir" ] || packs_dir="$SCRIPT_DIR/../codex/packs"
+  [ -d "$packs_dir" ] || { echo -e "  ${DIM}(none)${RESET}"; echo ""; return 0; }
+  for pack_dir in "$packs_dir"/*/; do
     [ -d "$pack_dir" ] || continue
     local name=$(basename "$pack_dir")
     local desc=""
@@ -195,8 +201,10 @@ echo ""
 
 if $DO_ALL; then
   install_core
-  if [ -d "$SCRIPT_DIR/packs" ]; then
-    for pack_dir in "$SCRIPT_DIR/packs"/*/; do
+  all_packs_dir="$SCRIPT_DIR/packs"
+  [ -d "$all_packs_dir" ] || all_packs_dir="$SCRIPT_DIR/../codex/packs"
+  if [ -d "$all_packs_dir" ]; then
+    for pack_dir in "$all_packs_dir"/*/; do
       [ -d "$pack_dir" ] || continue
       install_pack "$(basename "$pack_dir")"
     done

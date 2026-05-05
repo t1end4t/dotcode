@@ -8,7 +8,9 @@ What is already configured in this distribution. Read before adding or changing 
 **Harness settings** — `core/settings.json` → installed as `~/.pi/agent/settings.json`
 **Local model config** — `core/models.json` → installed as `~/.pi/agent/models.json`
 
-No hooks, MCP, plugins, prompts, or skills configured yet.
+No hooks, MCP, or plugins configured yet.
+
+**Skills** — installed into `~/.pi/agent/skills/` via pack installs (sources from codex packs, drops pack prefix to satisfy Pi naming rules).
 
 ## Local LLM
 
@@ -38,5 +40,7 @@ llama-server \
 
 ```bash
 ./install.sh --core                  # Core only
-./install.sh --list                  # Show available packs (none yet)
+./install.sh --list                  # Show available packs
+./install.sh --pack=NAME             # Install a pack
+./install.sh --all                   # Core + all packs
 ```
