@@ -1,9 +1,0 @@
-[submodule "guide"]
-	path = guide
-	url = https://github.com/shanraisshan/claude-code-best-practice
-[submodule "external/scientific-agent-skills"]
-	path = external/scientific-agent-skills
-	url = https://github.com/K-Dense-AI/scientific-agent-skills
-[submodule "external/anthropics-skills"]
-	path = external/anthropics-skills
-	url = https://github.com/anthropics/skills

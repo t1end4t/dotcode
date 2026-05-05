@@ -1,12 +1,6 @@
-[submodule "external/codex-cli-best-practice"]
-	path = external/codex-cli-best-practice
-	url = https://github.com/shanraisshan/codex-cli-best-practice
 [submodule "external/scientific-agent-skills"]
 	path = external/scientific-agent-skills
 	url = https://github.com/K-Dense-AI/scientific-agent-skills.git
 [submodule "external/claude-skills"]
 	path = external/claude-skills
 	url = https://github.com/anthropics/skills
-[submodule "external/codex-skills"]
-	path = external/codex-skills
-	url = https://github.com/openai/skills.git
