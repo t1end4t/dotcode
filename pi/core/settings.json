@@ -1,6 +1,6 @@
 {
   "defaultProvider": "llama-cpp",
-  "defaultModel": "qwen3.6-35b-a3b",
+  "defaultModel": "local-model",
   "defaultThinkingLevel": "medium",
   "enableInstallTelemetry": false,
   "compaction": {

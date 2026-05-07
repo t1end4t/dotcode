@@ -20,7 +20,7 @@ Configured provider:
 
 Configured model:
 
-- **qwen3.6-35b-a3b** — Qwen3.6 35B A3B local model alias
+- **local-model** — generic alias for whatever model you load in llama-server
 
 Expected local runtime:
 
@@ -28,7 +28,7 @@ Expected local runtime:
 llama-server \
   --model /path/to/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf \
   --port 8080 \
-  --alias qwen3.6-35b-a3b \
+  --alias local-model \
   -c 65536 \
   -n 32768 \
   -fa on \
