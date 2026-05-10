@@ -24,6 +24,15 @@ remove_if_exists() {
   fi
 }
 
+copy_file() {
+  local src="$1" dst="$2" label="$3"
+  [ -f "$src" ] || return 0
+  mkdir -p "$(dirname "$dst")"
+  cp "$src" "$dst"
+  echo -e "  ${GREEN}$label${RESET}"
+  COUNT=$((COUNT + 1))
+}
+
 # ── Uninstall core ──────────────────────────────────────────────────
 uninstall_core() {
   local core="$SCRIPT_DIR/core"
@@ -39,6 +48,7 @@ uninstall_core() {
   fi
 
   remove_if_exists "$CLAUDE_HOME/settings.json" "~/.claude/settings.json"
+  copy_file "$core/settings.json" "$CLAUDE_HOME/settings.json" "~/.claude/settings.json"
   remove_if_exists "$CLAUDE_HOME/CLAUDE.md" "~/.claude/CLAUDE.md"
   remove_if_exists "$CLAUDE_HOME/guide-path" "~/.claude/guide-path"
 

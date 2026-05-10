@@ -53,7 +53,6 @@ install_core() {
   echo -e "  ${CYAN}codex${RESET}"
 
   copy_file "$core/global-instructions.md" "$CODEX_HOME/AGENTS.md" "~/.codex/AGENTS.md"
-  copy_file "$core/config.toml"   "$CODEX_HOME/config.toml"   "~/.codex/config.toml"
   copy_dir  "$core/hooks"         "$CODEX_HOME/hooks"         "~/.codex/hooks/"
   chmod +x "$CODEX_HOME/hooks/"*.sh 2>/dev/null || true
 

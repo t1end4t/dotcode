@@ -1,45 +1,10 @@
 {
-  "sandbox": {
-    "enabled": true
-  },
-  "enabledPlugins": {
-    "claude-md-management@claude-plugins-official": false,
-    "claude-mem@thedotmack": false,
-    "commit-commands@claude-plugins-official": false,
-    "pyright-lsp@claude-plugins-official": false,
-    "typescript-lsp@claude-plugins-official": false,
-    "rust-analyzer-lsp@claude-plugins-official": false,
-    "context7@claude-plugins-official": false,
-    "serena@claude-plugins-official": false
-  },
-  "extraKnownMarketplaces": {
-    "thedotmack": {
-      "source": {
-        "source": "github",
-        "repo": "thedotmack/claude-mem"
-      }
-    }
-  },
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/user-prompt-submit-notification.sh"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/stop-notification.sh"
-          }
-        ]
-      }
-    ]
+  "hasCompletedOnboarding": true,
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:20128/v1",
+    "ANTHROPIC_AUTH_TOKEN": "sk_9router",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "paid-combo",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "paid-combo",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "paid-combo"
   }
 }

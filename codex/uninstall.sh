@@ -24,6 +24,22 @@ remove_if_exists() {
   fi
 }
 
+restore_core_config() {
+  local core_config="$SCRIPT_DIR/core/config.toml"
+  [ -f "$core_config" ] || return 0
+  mkdir -p "$CODEX_HOME"
+  cp "$core_config" "$CODEX_HOME/config.toml"
+  echo -e "  ✨ ${GREEN}~/.codex/config.toml restored${RESET}"
+}
+
+restore_core_auth() {
+  local core_auth="$SCRIPT_DIR/core/auth.json"
+  [ -f "$core_auth" ] || return 0
+  mkdir -p "$CODEX_HOME"
+  cp "$core_auth" "$CODEX_HOME/auth.json"
+  echo -e "  ✨ ${GREEN}~/.codex/auth.json restored${RESET}"
+}
+
 # ── Uninstall core ───────────────────────────────────────────────
 uninstall_core() {
   local core="$SCRIPT_DIR/core"
@@ -32,6 +48,9 @@ uninstall_core() {
 
   remove_if_exists "$CODEX_HOME/AGENTS.md"   "~/.codex/AGENTS.md"
   remove_if_exists "$CODEX_HOME/config.toml" "~/.codex/config.toml"
+  remove_if_exists "$CODEX_HOME/auth.json"   "~/.codex/auth.json"
+  restore_core_config
+  restore_core_auth
 
   # Hooks
   if [ -d "$core/hooks" ]; then
