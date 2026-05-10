@@ -6,12 +6,13 @@ What is already configured in this distribution. Read before adding or changing 
 
 **Global instructions** — `core/global-instructions.md` → installed as `~/.codex/AGENTS.md`
 
-No hooks, no MCP, no plugins configured yet.
+No hooks, no commands, no MCP, no plugins configured yet.
 
 ### Core Skills
 
 - **skill-creator** — Create, edit, eval, and optimize skills
 - **mcp-builder** — Guide for creating MCP servers (Python/Node)
+- **commit** — Commit normal repos or submodules, including parent pointer commits
 
 ## Packs (`packs/`)
 

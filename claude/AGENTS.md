@@ -7,6 +7,10 @@ What is already configured in this distribution. Read before adding or changing 
 **Global instructions** — `core/global-instructions.md` → installed as `~/.claude/CLAUDE.md`
 **Harness config** — `core/settings.json`
 
+### Core Commands
+
+- **commit** — Commit normal repos or submodules, including parent pointer commits
+
 ### Hooks
 
 | Hook              | File                                    | Purpose                              |

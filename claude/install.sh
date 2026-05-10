@@ -82,6 +82,7 @@ install_core() {
   if [ -d "$core" ]; then
     echo -e "  ${CYAN}claude${RESET}"
     copy_dir  "$core/hooks"     "$CLAUDE_HOME/hooks"     "~/.claude/hooks/"
+    copy_dir  "$core/commands"  "$CLAUDE_HOME/commands"  "~/.claude/commands/"
     copy_file "$core/settings.json" "$CLAUDE_HOME/settings.json" "~/.claude/settings.json"
     copy_file "$core/global-instructions.md" "$CLAUDE_HOME/CLAUDE.md" "~/.claude/CLAUDE.md"
     # Make hooks executable
