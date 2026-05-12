@@ -10,7 +10,13 @@ What is already configured in this distribution. Read before adding or changing 
 
 No hooks, MCP, or plugins configured yet.
 
-**Skills** — installed into `~/.pi/agent/skills/` via pack installs (sources from codex packs, drops pack prefix to satisfy Pi naming rules).
+**Skills** — installed into `~/.pi/agent/skills/` via core install or pack installs.
+
+### Available Skills
+
+| Skill | Description | Command |
+|-------|-------------|---------|
+| `commit` | Safely create Git commits (normal + submodule), never pushes | `/skill:commit` |
 
 ## Local LLM
 
