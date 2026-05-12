@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.codex/hooks/stop-notification.sh",
+            "timeout": 10,
+            "statusMessage": "Running stop notification"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.codex/hooks/user-prompt-submit-notification.sh",
+            "timeout": 10,
+            "statusMessage": "Running user prompt submit hook"
+          }
+        ]
+      }
+    ]
+  }
+}

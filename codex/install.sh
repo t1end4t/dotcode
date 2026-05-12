@@ -53,6 +53,7 @@ install_core() {
   echo -e "  ${CYAN}codex${RESET}"
 
   copy_file "$core/global-instructions.md" "$CODEX_HOME/AGENTS.md" "~/.codex/AGENTS.md"
+  copy_file "$core/hooks.json"     "$CODEX_HOME/hooks.json"     "~/.codex/hooks.json"
   copy_dir  "$core/hooks"         "$CODEX_HOME/hooks"         "~/.codex/hooks/"
   rm -rf "$CODEX_HOME/commands"
   chmod +x "$CODEX_HOME/hooks/"*.sh 2>/dev/null || true
