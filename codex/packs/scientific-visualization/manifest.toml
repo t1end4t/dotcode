@@ -1,7 +1,0 @@
-[pack]
-name = "scientific-visualization"
-description = "Publication-ready figures, scientific diagrams, infographics, and data visualization"
-version = "1.0.0"
-
-[claude]
-skills = "skills"

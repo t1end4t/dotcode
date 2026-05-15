@@ -16,7 +16,7 @@ Installer behavior: selected config is synced, so removed repo skills/hooks/prom
 
 ## External (sibling folder)
 
-Reference repos live outside this repo at `../external/`:
+Reference repos live outside this repo at `./external/`:
 - `claude-code-best-practice`
 - `codex-cli-best-practice`
 - `claude-skills`

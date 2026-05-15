@@ -1,6 +1,6 @@
 [pack]
 name = "research-workflow"
-description = "Find, search, cite, and verify academic papers across multiple databases"
+description = "Academic research workflow automation"
 version = "1.0.0"
 
 [claude]

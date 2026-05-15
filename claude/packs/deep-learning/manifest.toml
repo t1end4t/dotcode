@@ -1,6 +1,6 @@
 [pack]
 name = "deep-learning"
-description = "Train and scale neural networks with Transformers, PyTorch Lightning, and GPU acceleration"
+description = "Deep learning frameworks and acceleration"
 version = "1.0.0"
 
 [claude]

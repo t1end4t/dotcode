@@ -1,6 +1,6 @@
 [pack]
 name = "scientific-visualization"
-description = "Publication-ready figures, scientific diagrams, infographics, and data visualization"
+description = "Scientific visualization and graphics"
 version = "1.0.0"
 
 [claude]

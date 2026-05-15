@@ -1,6 +1,6 @@
 [pack]
 name = "data-analysis"
-description = "Statistical analysis, exploratory data analysis, database lookup, and fast dataframes"
+description = "Data analysis and visualization"
 version = "1.0.0"
 
 [claude]

@@ -1,6 +1,6 @@
 [pack]
 name = "scientific-writing"
-description = "Write, review, and format scientific manuscripts for publication"
+description = "Scientific writing and publication tools"
 version = "1.0.0"
 
 [claude]

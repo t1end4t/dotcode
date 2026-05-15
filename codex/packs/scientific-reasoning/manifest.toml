@@ -1,7 +1,0 @@
-[pack]
-name = "scientific-reasoning"
-description = "Generate hypotheses, brainstorm research ideas, and evaluate evidence quality"
-version = "1.0.0"
-
-[claude]
-skills = "skills"

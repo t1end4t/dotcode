@@ -1,0 +1,27 @@
+[pack.office-tools]
+skills = ["docx", "pdf", "pptx", "xlsx"]
+description = "Create, read, and edit PDF, Word, PowerPoint, and Excel files"
+
+[pack.deep-learning]
+skills = ["optimize-for-gpu", "pytorch-lightning", "transformers"]
+description = "Deep learning frameworks and acceleration"
+
+[pack.research-workflow]
+skills = ["citation-management", "literature-review", "paper-lookup", "research-lookup"]
+description = "Academic research workflow automation"
+
+[pack.scientific-reasoning]
+skills = ["hypothesis-generation", "scientific-brainstorming", "scientific-critical-thinking"]
+description = "Scientific reasoning and hypothesis generation"
+
+[pack.scientific-writing]
+skills = ["peer-review", "scientific-writing", "venue-templates"]
+description = "Scientific writing and publication tools"
+
+[pack.data-analysis]
+skills = ["statistical-analysis", "exploratory-data-analysis", "database-lookup", "polars", "dask", "markitdown"]
+description = "Data analysis and visualization"
+
+[pack.scientific-visualization]
+skills = ["scientific-visualization", "scientific-schematics", "matplotlib", "seaborn", "markdown-mermaid-writing", "infographics"]
+description = "Scientific visualization and graphics"

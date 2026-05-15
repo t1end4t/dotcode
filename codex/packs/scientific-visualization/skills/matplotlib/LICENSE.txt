@@ -1,1 +1,0 @@
-License: PSF (https://github.com/matplotlib/matplotlib/tree/main/LICENSE)
