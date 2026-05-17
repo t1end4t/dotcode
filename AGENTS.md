@@ -6,9 +6,10 @@ Shared config home for coding agents. Each subfolder is one agent's config distr
 
 | Folder   | Target       | Instruction file       |
 | -------- | ------------ | ---------------------- |
-| `claude/`| `~/.claude/` | `CLAUDE.md`            |
-| `codex/` | `~/.codex/`  | `AGENTS.md`            |
-| `pi/`    | `~/.pi/agent/` | `AGENTS.md`          |
+| `claude/`  | `~/.claude/` | `CLAUDE.md` |
+| `codex/`   | `~/.codex/`  | `AGENTS.md` |
+| `pi/`      | `~/.pi/agent/` | `AGENTS.md` |
+| `opencode/`| `~/.config/opencode/` | `AGENTS.md` |
 
 See each folder's own `AGENTS.md` for the full inventory (hooks, MCP, skills, packs, install).
 
@@ -28,6 +29,7 @@ Reference repos live outside this repo at `./external/`:
 ./install.sh --claude --core          # Claude core only
 ./install.sh --codex --core           # Codex core only
 ./install.sh --pi --core              # Pi core only
+./install.sh --opencode --core        # OpenCode core only
 ./install.sh --all-agents --all       # Everything
 ./install.sh --claude --pack=NAME     # Single pack
 ./install.sh --claude --list          # List packs

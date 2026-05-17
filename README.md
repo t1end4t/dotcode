@@ -8,10 +8,9 @@ Shared config home for coding agents.
 claude/       # Claude Code config → ~/.claude/
 codex/        # Codex CLI config   → ~/.codex/
 pi/           # Pi Coding Agent    → ~/.pi/agent/
+opencode/     # OpenCode config    → ~/.config/opencode/
 ../external/  # Reference repos (submodules, outside this repo)
 ```
-
-Future agents can be added beside these folders, e.g. `opencode/`.
 
 ## Install
 
@@ -21,6 +20,7 @@ Select one or more agents first, then pass installer options.
 ./install.sh --codex --core
 ./install.sh --claude --core
 ./install.sh --pi --core
+./install.sh --opencode --core
 ./install.sh --codex --claude --pack=research-workflow
 ./install.sh --all-agents --all
 ./install.sh --codex --list
@@ -31,6 +31,7 @@ Agent flags:
 - `--codex` installs to `~/.codex`
 - `--claude` installs to `~/.claude`
 - `--pi` installs to `~/.pi/agent`
+- `--opencode` installs to `~/.config/opencode`
 - `--all-agents` installs every supported agent
 
 Installer options are passed to each selected agent installer: `--core`, `--mcp`, `--pack=NAME`, `--all`, `--list`.
