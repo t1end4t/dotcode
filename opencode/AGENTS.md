@@ -6,12 +6,6 @@ What is already configured in this distribution. Read before adding or changing 
 
 **Config** — `core/opencode.json` → installed as `~/.config/opencode/opencode.json`
 
-### Plugins
-
-| Plugin | File | Purpose |
-| ------ | ---- | ------- |
-| notification | `plugins/notification.ts` | Claude Code-like desktop notification hooks |
-
 ## Install
 
 ```bash
