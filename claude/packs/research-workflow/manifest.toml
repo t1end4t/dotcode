@@ -1,6 +1,6 @@
 [pack]
 name = "research-workflow"
-description = "Academic research workflow automation"
+description = "Academic literature, paper search, citations, and research notebook workflows"
 version = "1.0.0"
 
 [claude]

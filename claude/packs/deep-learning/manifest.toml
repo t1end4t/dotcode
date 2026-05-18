@@ -1,6 +1,6 @@
 [pack]
 name = "deep-learning"
-description = "Deep learning frameworks and acceleration"
+description = "LLM/deep learning frameworks, GPU acceleration, and cloud GPU execution"
 version = "1.0.0"
 
 [claude]

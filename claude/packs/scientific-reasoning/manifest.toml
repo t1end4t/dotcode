@@ -1,6 +1,6 @@
 [pack]
 name = "scientific-reasoning"
-description = "Scientific reasoning and hypothesis generation"
+description = "Scientific reasoning, hypothesis generation, and research idea evaluation"
 version = "1.0.0"
 
 [claude]
