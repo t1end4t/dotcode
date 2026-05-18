@@ -23,6 +23,8 @@
       }
     }
   },
+  "lsp": true,
+  "formatter": true,
   "model": "9router/paid-combo",
   "agent": {
     "explorer": {
