@@ -58,6 +58,23 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Directory-Local Context
+
+**Keep context close to code. Future agents should not need to reread the whole repo to work safely.**
+
+When creating or substantially changing a meaningful code directory, create or update its `AGENTS.md`.
+
+Create or update a local `AGENTS.md` for every directory that contains meaningful work — code, configs, notes, or other content a future agent would need to understand to operate there. For deeper nested folders, create or update them when the folder introduces distinct responsibilities, conventions, commands, architecture boundaries, or gotchas.
+
+Local context files are scoped indexes, not full docs. Include only durable information needed to work in that directory:
+- Directory purpose
+- Files to read first
+- Local conventions and boundaries
+- Local test/lint/build commands
+- Gotchas not obvious from code
+
+Do not duplicate parent instructions. Do not add generic advice. Do not create files for trivial folders, generated output, or one-off files.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
