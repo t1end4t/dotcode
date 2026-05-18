@@ -52,8 +52,10 @@ install_core() {
   echo -e "  ${CYAN}opencode${RESET}"
 
   # Config + plugins
-  copy_file "$core/opencode.json" "$OPENCODE_HOME/opencode.json" "~/.config/opencode/opencode.json"
-  copy_dir  "$core/plugins"      "$OPENCODE_HOME/plugins"      "~/.config/opencode/plugins/"
+  copy_file "$core/opencode.json"  "$OPENCODE_HOME/opencode.json"  "~/.config/opencode/opencode.json"
+  copy_file "$core/opencode.jsonc" "$OPENCODE_HOME/opencode.jsonc" "~/.config/opencode/opencode.jsonc"
+  copy_file "$core/tui.json"       "$OPENCODE_HOME/tui.json"       "~/.config/opencode/tui.json"
+  copy_dir  "$core/plugins"        "$OPENCODE_HOME/plugins"        "~/.config/opencode/plugins/"
 
   echo ""
 }
