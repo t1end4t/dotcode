@@ -11,3 +11,4 @@ wire_api = "responses"
 
 [agents.subagent]
 model = "paid-combo"
+description = "General-purpose subagent for delegated Codex tasks"
