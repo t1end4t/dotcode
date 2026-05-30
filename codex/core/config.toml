@@ -1,5 +1,6 @@
 model = "paid-combo"
 model_provider = "9router"
+model_reasoning_effort = "xhigh"
 
 [features]
 hooks = true

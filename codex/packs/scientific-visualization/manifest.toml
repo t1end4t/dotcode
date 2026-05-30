@@ -1,0 +1,7 @@
+[pack]
+name = "scientific-visualization"
+description = "Scientific visualization and publication graphics"
+version = "1.0.0"
+
+[claude]
+skills = "skills"

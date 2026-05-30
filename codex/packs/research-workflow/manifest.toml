@@ -1,0 +1,7 @@
+[pack]
+name = "research-workflow"
+description = "Academic literature, paper search, citations, and research notebook workflows"
+version = "1.0.0"
+
+[claude]
+skills = "skills"

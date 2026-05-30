@@ -17,6 +17,8 @@ No hooks, no commands, no MCP, no plugins configured yet.
 ## Packs (`packs/`)
 
 ### data-analysis
+- **get-available-resources** — ...
+- **modal** — ...
 
 - **statistical-analysis** — Guided test selection, assumption checking, APA reporting
 - **exploratory-data-analysis** — Auto-detect 200+ file formats, quality reports
@@ -26,6 +28,8 @@ No hooks, no commands, no MCP, no plugins configured yet.
 - **markitdown** — Convert PDF/DOCX/PPTX/images to Markdown
 
 ### deep-learning
+- **get-available-resources** — ...
+- **modal** — ...
 
 - **optimize-for-gpu** — RAPIDS/CUDA acceleration (cuDF, cuML, cuPy, Numba, Warp, …)
 - **pytorch-lightning** — LightningModule, Trainer, DataModule, distributed training
@@ -39,6 +43,8 @@ No hooks, no commands, no MCP, no plugins configured yet.
 - **xlsx** — Excel spreadsheets
 
 ### research-workflow
+- **exa-search** — ...
+- **open-notebook** — ...
 
 - **citation-management** — Citations
 - **literature-review** — Literature review workflow
@@ -46,6 +52,8 @@ No hooks, no commands, no MCP, no plugins configured yet.
 - **research-lookup** — Cross-database search
 
 ### scientific-reasoning
+- **hypogenic** — ...
+- **scholar-evaluation** — ...
 
 - **hypothesis-generation** — Generate hypotheses
 - **scientific-brainstorming** — Brainstorm research ideas
