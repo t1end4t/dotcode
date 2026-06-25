@@ -1,52 +1,45 @@
-# Pi Coding Agent Config — Inventory
+# Pi Coding Agent Config — Operating Instructions
 
-What is already configured in this distribution. Read before adding or changing anything.
+Rules and commands for this distribution. For the onboarding map see `INDEX.md`.
 
-## Core (`core/`)
+## Commands
 
-**Global instructions** — `core/global-instructions.md` → installed as `~/.pi/agent/AGENTS.md`
-**Harness settings** — `core/settings.json` → installed as `~/.pi/agent/settings.json`
-**Local model config** — `core/models.json` → installed as `~/.pi/agent/models.json`
+```bash
+./install.sh --core                  # Core only (AGENTS.md, settings, models, skills)
+./install.sh --pack=NAME             # Single pack
+./install.sh --all                   # Core + all packs
+./install.sh --list                  # Show available packs
+./uninstall.sh                       # Remove from ~/.pi/agent
+```
 
-No hooks, MCP, or plugins configured yet.
+Run from this folder (the installer targets `~/.pi/agent/`).
 
-**Skills** — installed into `~/.pi/agent/skills/` via core install or pack installs.
+## Conventions
 
-### Available Skills
+- Core instructions: `core/global-instructions.md` → `~/.pi/agent/AGENTS.md`.
+- Settings: `core/settings.json` → `~/.pi/agent/settings.json`.
+- Models: `core/models.json` → `~/.pi/agent/models.json`.
+- Skills: `core/skills/` and pack skills → `~/.pi/agent/skills/`.
+- No hooks, MCP, or plugins configured yet.
 
-| Skill | Description | Command |
-|-------|-------------|---------|
-| `commit` | Safely create Git commits (normal + submodule), never pushes | `/skill:commit` |
+## Local LLM runtime
 
-## Local LLM
-
-Configured provider:
-
-- **llama-cpp** — OpenAI-compatible local endpoint at `http://localhost:8080/v1`
-
-Configured model:
-
-- **local-model** — generic alias for whatever model you load in llama-server
-
-Expected local runtime:
+Provider `llama-cpp` (OpenAI-compatible endpoint `http://localhost:8080/v1`),
+model alias `local-model`:
 
 ```bash
 llama-server \
   --model /path/to/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf \
-  --port 8080 \
-  --alias local-model \
-  -c 65536 \
-  -n 32768 \
-  -fa on \
-  -ctk q8_0 -ctv q8_0 \
+  --port 8080 --alias local-model \
+  -c 65536 -n 32768 -fa on -ctk q8_0 -ctv q8_0 \
   --chat-template-kwargs '{"preserve_thinking": true}'
 ```
 
-## Install
+## Sync behavior
 
-```bash
-./install.sh --core                  # Core only
-./install.sh --list                  # Show available packs
-./install.sh --pack=NAME             # Install a pack
-./install.sh --all                   # Core + all packs
-```
+Install syncs the selected config: anything removed here is removed from
+`~/.pi/agent/`. Add skills first here, then reinstall.
+
+## Boundaries
+
+- Do not edit `~/.pi/agent/` directly; edit the source here and reinstall.

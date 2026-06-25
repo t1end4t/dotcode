@@ -1,122 +1,162 @@
 # Migrate Skills: Claude → Codex
 
-Step-by-step instruction for copying all Claude Code skills into the Codex CLI distribution.
+Safe recipe for copying Claude skills into the Codex distribution in this repo.
 
 ## Source & Target
 
 | | Claude | Codex |
 |---|---|---|
-| **Core skills** | `claude/core/skills/<name>/` | `codex/core/skills/<name>/` |
 | **Pack skills** | `claude/packs/<pack>/skills/<name>/` | `codex/packs/<pack>/skills/<name>/` |
+| **Core skills** | `claude/core/skills/<name>/` | `codex/core/skills/<name>/` |
 | **Install target** | `~/.claude/skills/` | `~/.codex/skills/` |
 
-## Checklist
+Note: core skill folders exist for future use, but are intentionally empty right now.
 
-### 1. Copy directory trees
+## 1. Copy Pack Skills
+
+Use delete-then-copy. Avoid `cp -r src/ dst/`: if `dst` exists, it creates nested `dst/skills/...` paths.
 
 ```bash
-# Core skills
-cp -r claude/core/skills/ codex/core/skills/
-
-# Packs — copy entire pack directories (skills + manifest.toml)
-for pack in claude/packs/*/; do
+for pack in claude/packs/*; do
+  [ -d "$pack/skills" ] || continue
   name=$(basename "$pack")
   mkdir -p "codex/packs/$name"
-  [ -d "$pack/skills" ] && cp -r "$pack/skills" "codex/packs/$name/skills"
-  [ -f "$pack/manifest.toml" ] && cp "$pack/manifest.toml" "codex/packs/$name/manifest.toml"
+  rm -rf "codex/packs/$name/skills"
+  cp -a "$pack/skills" "codex/packs/$name/skills"
+  [ -f "$pack/manifest.toml" ] && cp -a "$pack/manifest.toml" "codex/packs/$name/manifest.toml"
 done
 ```
 
-All supporting subdirectories (`scripts/`, `references/`, `assets/`, `templates/`) come along — no changes needed.
+If `rsync` is available, this is equivalent and preserves deletion sync:
 
-### 2. Rewrite SKILL.md frontmatter
+```bash
+for pack in claude/packs/*; do
+  [ -d "$pack/skills" ] || continue
+  name=$(basename "$pack")
+  mkdir -p "codex/packs/$name"
+  rsync -a --delete "$pack/skills/" "codex/packs/$name/skills/"
+  [ -f "$pack/manifest.toml" ] && cp -a "$pack/manifest.toml" "codex/packs/$name/manifest.toml"
+done
+```
 
-Every `SKILL.md` needs its YAML frontmatter translated. The body content stays **unchanged**.
+All supporting subdirectories (`scripts/`, `references/`, `assets/`, `templates/`) come along.
 
-#### Field mapping
+## 2. Rewrite `SKILL.md` Frontmatter
 
-| Claude field | Action | Codex equivalent |
-|---|---|---|
-| `name` | **Keep** | Same |
-| `description` | **Keep** | Same |
-| `argument-hint` | **Keep** | Same |
-| `license` | **Drop** | Not a Codex frontmatter field. Move to `LICENSE.txt` if not already present |
-| `metadata` | **Drop** | Not a Codex frontmatter field |
-| `compatibility` | **Drop** | Not a Codex frontmatter field. Move note into SKILL.md body under a `## Requirements` section |
-| `allowed-tools` | **Drop** | Not supported. If important, add as prose in SKILL.md body: "This skill works best when the agent has access to: ..." |
-| `user-invocable` | **Drop** | Use `agents/openai.yaml` with `policy.allow_implicit_invocation` instead, only if needed |
-| `context` | **Drop** | Not supported in Codex |
-| `model` | **Drop** | Not supported in Codex |
-| `effort` | **Drop** | Not supported in Codex |
-| `hooks` | **Drop** | Not supported in skill frontmatter |
-| `paths` | **Drop** | Not supported in Codex |
-
-#### Minimal result
+Codex `SKILL.md` frontmatter should keep only fields supported by the official Codex skills docs:
 
 ```yaml
 ---
-name: data-analysis:polars
-description: Fast in-memory DataFrame library for datasets that fit in RAM. ...
+name: polars
+description: Fast in-memory DataFrame library for datasets that fit in RAM...
 ---
 ```
 
-Only `name` and `description` survive. Add `argument-hint` if the original had it.
+Official docs: https://developers.openai.com/codex/skills
 
-### 3. Handle dropped fields case-by-case
+### Field Mapping
 
-For each skill, check if a dropped field carries info that should be preserved:
+| Claude field | Codex action |
+|---|---|
+| `name` | Keep |
+| `description` | Keep |
+| `argument-hint` | Drop |
+| `license` | Drop; keep existing `LICENSE.txt` if present |
+| `metadata` | Drop |
+| `compatibility` | Move into body as `## Requirements` if not already covered |
+| `allowed-tools` | Move to `agents/openai.yaml` dependencies or body prose if important |
+| `user-invocable` | Move to `agents/openai.yaml` policy if needed |
+| `context` | Drop |
+| `model` | Drop |
+| `effort` | Drop |
+| `hooks` | Drop |
+| `paths` | Drop |
 
-- **`allowed-tools`** — 12 skills have this. If the skill body already references those tools by name in its instructions, no action needed. Otherwise add a note.
-- **`license`** — If the skill directory already has `LICENSE.txt`, do nothing. If `license:` was the only place the license was noted, create `LICENSE.txt`.
-- **`compatibility`** — 2 skills have this. Move the text into the skill body as a `## Requirements` section near the top.
-- **`metadata.skill-author`** — Informational only. Can be preserved as a comment at the top of SKILL.md or dropped entirely.
+## 3. Optional `agents/openai.yaml`
 
-### 4. Create `agents/openai.yaml` (optional)
-
-Only needed if a skill had `user-invocable: false` or other policy needs. Most skills won't need this.
+Use only when a skill needs Codex UI metadata, dependency declarations, or invocation policy.
 
 ```yaml
-# codex/core/skills/weather-fetcher/agents/openai.yaml
 policy:
   allow_implicit_invocation: false
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "openaiDeveloperDocs"
+      description: "OpenAI Docs MCP server"
+      transport: "streamable_http"
+      url: "https://developers.openai.com/mcp"
 ```
 
-### 5. Update `codex/AGENTS.md` inventory
-
-Add all migrated skills to the inventory following the existing format. Core skills go under `## Core`, pack skills under their pack heading.
-
-### 6. Verify
+## 4. Verify
 
 ```bash
-# All SKILL.md files should have only name/description/argument-hint in frontmatter
-for f in $(find codex/ -name 'SKILL.md'); do
-  echo "=== $f ==="
-  sed -n '2,/^---$/p' "$f" | grep -vE '^\s*(name|description|argument-hint|---)' && echo "  ⚠ unexpected fields" || echo "  ✅ clean"
-done
+# Frontmatter should contain only name + description.
+python3 - <<'PY'
+from pathlib import Path
+allowed = {"name", "description"}
+failed = False
+for path in Path("codex").rglob("SKILL.md"):
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        print(f"missing frontmatter: {path}")
+        failed = True
+        continue
+    front = text.split("---", 2)[1]
+    keys = {
+        line.split(":", 1)[0].strip()
+        for line in front.splitlines()
+        if line.strip() and not line.startswith((" ", "-")) and ":" in line
+    }
+    extra = keys - allowed
+    if extra:
+        print(f"unexpected fields {sorted(extra)}: {path}")
+        failed = True
+raise SystemExit(1 if failed else 0)
+PY
 ```
 
 ```bash
-# Pack count should match
-echo "Claude packs: $(ls -d claude/packs/*/ 2>/dev/null | wc -l)"
-echo "Codex packs:  $(ls -d codex/packs/*/ 2>/dev/null | wc -l)"
-echo "Claude skills: $(find claude/ -name 'SKILL.md' | wc -l)"
-echo "Codex skills:  $(find codex/ -name 'SKILL.md' | wc -l)"
+# Pack count parity.
+echo "Claude packs: $(find claude/packs -mindepth 1 -maxdepth 1 -type d | wc -l)"
+echo "Codex packs:  $(find codex/packs -mindepth 1 -maxdepth 1 -type d | wc -l)"
+echo "Claude pack skills: $(find claude/packs -name SKILL.md | wc -l)"
+echo "Codex pack skills:  $(find codex/packs -name SKILL.md | wc -l)"
+echo "Codex core skills:  $(find codex/core/skills -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
 ```
 
-## Current Inventory (31 skills)
+```bash
+# No accidental nested copy.
+find codex -path '*/skills/skills' -type d -print
+```
 
-### Core (2)
-- `skill-creator` — Create, edit, eval, optimize skills
-- `mcp-builder` — Guide for creating MCP servers
+## Current Inventory
 
-### Packs (29)
+### Core Skills (1)
 
-| Pack | Skills |
-|---|---|
-| `data-analysis` | `statistical-analysis`, `exploratory-data-analysis`, `database-lookup`, `polars`, `dask`, `markitdown` |
-| `deep-learning` | `transformers`, `optimize-for-gpu`, `pytorch-lightning` |
-| `office-tools` | `xlsx`, `pptx`, `pdf`, `docx` |
-| `research-workflow` | `literature-review`, `citation-management`, `paper-lookup`, `research-lookup` |
-| `scientific-reasoning` | `scientific-brainstorming`, `scientific-critical-thinking`, `hypothesis-generation` |
-| `scientific-visualization` | `scientific-visualization`, `scientific-schematics`, `matplotlib`, `seaborn`, `markdown-mermaid-writing`, `infographics` |
-| `scientific-writing` | `peer-review`, `scientific-writing`, `venue-templates` |
+- `hpc-training`
+
+### Claude Pack Source (49)
+
+| Pack | Count |
+|---|---:|
+| `data-analysis` | 13 |
+| `deep-learning` | 6 |
+| `office-tools` | 4 |
+| `research-workflow` | 9 |
+| `scientific-reasoning` | 6 |
+| `scientific-visualization` | 6 |
+| `scientific-writing` | 5 |
+
+### Codex Packs Before Full Migration (35)
+
+| Pack | Count |
+|---|---:|
+| `data-analysis` | 6 |
+| `deep-learning` | 5 |
+| `office-tools` | 4 |
+| `research-workflow` | 6 |
+| `scientific-reasoning` | 5 |
+| `scientific-visualization` | 6 |
+| `scientific-writing` | 3 |

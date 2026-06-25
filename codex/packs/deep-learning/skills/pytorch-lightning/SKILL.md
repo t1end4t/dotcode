@@ -1,6 +1,6 @@
 ---
 name: pytorch-lightning
-description: Deep learning framework (PyTorch Lightning). Organize PyTorch code into LightningModules, configure Trainers for multi-GPU/TPU, implement data pipelines, callbacks, logging (W&B, TensorBoard), distributed training (DDP, FSDP, DeepSpeed), for scalable neural network training.
+description: Deep learning framework (PyTorch Lightning / lightning package). Organize PyTorch code into LightningModules, configure Trainers for multi-GPU/TPU, implement data pipelines, callbacks, logging (W&B, TensorBoard, MLflow), distributed training (DDP, FSDP, DeepSpeed), for scalable neural network training.
 ---
 
 # PyTorch Lightning
@@ -8,6 +8,21 @@ description: Deep learning framework (PyTorch Lightning). Organize PyTorch code 
 ## Overview
 
 PyTorch Lightning is a deep learning framework that organizes PyTorch code to eliminate boilerplate while maintaining full flexibility. Automate training workflows, multi-device orchestration, and implement best practices for neural network training and scaling across multiple GPUs/TPUs.
+
+**Current upstream:** lightning 2.6.4 (PyPI, May 2026). Docs: [lightning.ai/docs/pytorch/stable](https://lightning.ai/docs/pytorch/stable/). Use `import lightning as L` (the `pytorch-lightning` package name still installs the same library).
+
+## Installation
+
+```bash
+uv pip install lightning
+```
+
+Optional extras:
+
+```bash
+uv pip install lightning[extra]    # loggers, strategies, etc.
+uv pip install wandb mlflow        # specific loggers as needed
+```
 
 ## When to Use This Skill
 
@@ -82,9 +97,10 @@ Integrate with multiple logging platforms:
 - TensorBoard (default)
 - Weights & Biases (WandbLogger)
 - MLflow (MLFlowLogger)
-- Neptune (NeptuneLogger)
 - Comet (CometLogger)
 - CSV (CSVLogger)
+
+Note: `NeptuneLogger` was removed in lightning 2.6.4. Use W&B, MLflow, or TensorBoard instead.
 
 Log metrics using `self.log("metric_name", value)` in any LightningModule method.
 
