@@ -50,7 +50,7 @@ Transform tasks into verifiable goals:
 - "Refactor X" → "Ensure tests pass before and after"
 
 For multi-step tasks, state a brief plan:
-```
+```md
 1. [Step] → verify: [check]
 2. [Step] → verify: [check]
 3. [Step] → verify: [check]
@@ -62,16 +62,20 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 **Keep context close to code. Future agents should not need to reread the whole repo to work safely.**
 
-When creating or substantially changing a meaningful code directory, create or update its `AGENTS.md`.
+Use two local files when a directory contains meaningful work:
 
-Create or update a local `AGENTS.md` for every directory that contains meaningful work — code, configs, notes, or other content a future agent would need to understand to operate there. For deeper nested folders, create or update them when the folder introduces distinct responsibilities, conventions, commands, architecture boundaries, or gotchas.
+- `AGENTS.md` — operating instructions only: rules, conventions, commands, boundaries, gotchas.
+- `INDEX.md` — onboarding map only: purpose, files to read first, links, structure, owner/context.
 
-Local context files are scoped indexes, not full docs. Include only durable information needed to work in that directory:
-- Directory purpose
-- Files to read first
-- Local conventions and boundaries
-- Local test/lint/build commands
-- Gotchas not obvious from code
+Do not duplicate information between `AGENTS.md` and `INDEX.md`. If one file needs the other, link to it instead of copying.
+
+For Claude Code compatibility, add a sibling `CLAUDE.md` containing only:
+
+```md
+@AGENTS.md
+```
+
+Create or update local context only for meaningful directories — code, configs, notes, or content a future agent needs to operate safely. For deeper nested folders, create or update these files only when the folder introduces distinct responsibilities, conventions, commands, architecture boundaries, or gotchas.
 
 Do not duplicate parent instructions. Do not add generic advice. Do not create files for trivial folders, generated output, or one-off files.
 
