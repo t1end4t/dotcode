@@ -7,18 +7,19 @@ Rules and commands for this distribution. For the onboarding map see `INDEX.md`.
 ```bash
 ./install.sh --core                  # Core only (AGENTS.md, config, hooks, skills)
 ./install.sh --pack=NAME             # Single pack
+./install.sh --pack=NAME --target=DIR # Pack into DIR/.agents/skills
 ./install.sh --all                   # Core + all packs
 ./install.sh --list                  # Show available packs
 ./uninstall.sh                       # Remove from ~/.codex
 ```
 
-Run from this folder (the installer targets `~/.codex/`).
+Run from this folder. Core targets `~/.codex/`; packs target `DIR/.agents/skills` (`$PWD` by default).
 
 ## Conventions
 
 - Core instructions: `core/global-instructions.md` → `~/.codex/AGENTS.md`.
 - Hooks config: `core/hooks.json`; hook scripts in `core/hooks/`.
-- Core skills live in `core/skills/`; pack skills under `packs/<pack>/skills/`.
+- Core skills live in `core/skills/`; pack skills under `packs/<pack>/skills/` and install to repo-local `.agents/skills/`.
 - Config: `core/config.toml`, `core/auth.json`.
 
 ## Sync behavior

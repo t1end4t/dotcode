@@ -21,6 +21,7 @@ usage() {
   echo "  ./install.sh --claude --core"
   echo "  ./install.sh --pi --core"
   echo "  ./install.sh --opencode --core"
+  echo "  ./install.sh --codex --pack=research-workflow --target=/path/to/project"
   echo "  ./install.sh --codex --claude --pack=research-workflow"
   echo "  ./install.sh --all-agents --all"
   echo "  ./install.sh --codex --list"
@@ -33,7 +34,7 @@ usage() {
   echo "  --all-agents  Target every supported agent"
   echo ""
   echo "Options passed through to agent installers:"
-  echo "  --core --mcp --pack=NAME --all --list -h --help"
+  echo "  --core --mcp --pack=NAME --target=DIR --all --list -h --help"
   echo ""
 }
 

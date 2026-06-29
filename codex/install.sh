@@ -14,6 +14,7 @@ RESET="\033[0m"
 
 # ── Target directories ─────────────────────────────────────────────
 CODEX_HOME="$HOME/.codex"
+PACK_TARGET_DIR="$PWD"
 
 COUNT=0
 
@@ -90,6 +91,7 @@ install_core() {
 install_pack() {
   local pack_name="$1"
   local pack_dir="$SCRIPT_DIR/packs/$pack_name"
+  local skills_home="$PACK_TARGET_DIR/.agents/skills"
 
   if [ ! -d "$pack_dir" ]; then
     echo -e "  ${RED}Pack '$pack_name' not found${RESET}"
@@ -107,18 +109,18 @@ install_pack() {
 
   echo -e "  ${CYAN}codex${RESET}"
 
-  # Skills (use pack:skill naming)
+  # Skills (repo-local, use pack:skill naming)
   if [ -d "$pack_dir/skills" ]; then
-    mkdir -p "$CODEX_HOME/skills"
-    rm -rf "$CODEX_HOME/skills/${pack_name}:"*
+    mkdir -p "$skills_home"
+    rm -rf "$skills_home/${pack_name}:"*
     for skill_dir in "$pack_dir/skills"/*/; do
       [ -d "$skill_dir" ] || continue
       local skill_name=$(basename "$skill_dir")
       [ -f "$skill_dir/SKILL.md" ] || continue
-      local dest="$CODEX_HOME/skills/${pack_name}:${skill_name}"
+      local dest="$skills_home/${pack_name}:${skill_name}"
       rm -rf "$dest"
       cp -r "$skill_dir" "$dest"
-      echo -e "  ✅  ${GREEN}~/.codex/skills/${pack_name}:${skill_name}/${RESET}"
+      echo -e "  ✅  ${GREEN}$skills_home/${pack_name}:${skill_name}/${RESET}"
       COUNT=$((COUNT + 1))
     done
   fi
@@ -160,11 +162,12 @@ usage() {
   echo "Usage:"
   echo "  ./install.sh --core                   Install Layer 0 (core AGENTS.md, config, hooks, skills)"
   echo "  ./install.sh --pack=NAME              Install a specific pack"
+  echo "  ./install.sh --pack=NAME --target=DIR Install pack skills into DIR/.agents/skills"
   echo "  ./install.sh --pack=NAME --pack=NAME  Install multiple packs"
   echo "  ./install.sh --all                    Install core + all packs"
   echo "  ./install.sh --list                   List available packs"
   echo ""
-  echo "Target: codex (~/.codex)"
+  echo "Target: core → ~/.codex, packs → ./ .agents/skills unless --target=DIR"
   echo ""
 }
 
@@ -192,6 +195,9 @@ while [ $# -gt 0 ]; do
       ;;
     --pack=*)
       PACKS+=("${1#--pack=}")
+      ;;
+    --target=*)
+      PACK_TARGET_DIR="${1#--target=}"
       ;;
     -h|--help)
       usage

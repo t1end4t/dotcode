@@ -12,6 +12,7 @@ DIM="\033[2m"
 RESET="\033[0m"
 
 CODEX_HOME="$HOME/.codex"
+PACK_TARGET_DIR="$PWD"
 
 COUNT=0
 
@@ -85,6 +86,7 @@ uninstall_core() {
 uninstall_pack() {
   local pack_name="$1"
   local pack_dir="$SCRIPT_DIR/packs/$pack_name"
+  local skills_home="$PACK_TARGET_DIR/.agents/skills"
 
   if [ ! -d "$pack_dir" ]; then
     echo -e "  ${RED}Pack '$pack_name' not found${RESET}"
@@ -94,12 +96,12 @@ uninstall_pack() {
   echo -e "${BOLD}Uninstalling pack: ${CYAN}$pack_name${RESET}"
   echo ""
 
-  # Skills (match pack:skill naming from install)
+  # Skills (repo-local, match pack:skill naming from install)
   if [ -d "$pack_dir/skills" ]; then
     for skill_dir in "$pack_dir/skills"/*/; do
       [ -d "$skill_dir" ] || continue
       local skill_name=$(basename "$skill_dir")
-      remove_if_exists "$CODEX_HOME/skills/${pack_name}:${skill_name}" "~/.codex/skills/${pack_name}:${skill_name}/"
+      remove_if_exists "$skills_home/${pack_name}:${skill_name}" "$skills_home/${pack_name}:${skill_name}/"
     done
   fi
 
@@ -121,6 +123,7 @@ usage() {
   echo "Usage:"
   echo "  ./uninstall.sh --core                   Uninstall Layer 0"
   echo "  ./uninstall.sh --pack=NAME              Uninstall a specific pack"
+  echo "  ./uninstall.sh --pack=NAME --target=DIR Uninstall pack skills from DIR/.agents/skills"
   echo "  ./uninstall.sh --all                    Uninstall core + all packs"
   echo ""
 }
@@ -139,6 +142,7 @@ while [ $# -gt 0 ]; do
     --core)     DO_CORE=true ;;
     --all)      DO_ALL=true ;;
     --pack=*)   PACKS+=("${1#--pack=}") ;;
+    --target=*) PACK_TARGET_DIR="${1#--target=}" ;;
     -h|--help)  usage; exit 0 ;;
     *)          echo -e "${RED}Unknown option: $1${RESET}"; usage; exit 1 ;;
   esac

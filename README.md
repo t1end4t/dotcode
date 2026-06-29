@@ -21,6 +21,7 @@ Select one or more agents first, then pass installer options.
 ./install.sh --claude --core
 ./install.sh --pi --core
 ./install.sh --opencode --core
+./install.sh --codex --pack=research-workflow --target=/path/to/project
 ./install.sh --codex --claude --pack=research-workflow
 ./install.sh --all-agents --all
 ./install.sh --codex --list
@@ -34,7 +35,9 @@ Agent flags:
 - `--opencode` installs to `~/.config/opencode`
 - `--all-agents` installs every supported agent
 
-Installer options are passed to each selected agent installer: `--core`, `--mcp`, `--pack=NAME`, `--all`, `--list`.
+Installer options are passed to each selected agent installer: `--core`, `--mcp`, `--pack=NAME`, `--target=DIR`, `--all`, `--list`.
+
+Codex packs install repo-local skills into `DIR/.agents/skills` (`$PWD/.agents/skills` by default) to avoid loading large packs globally.
 
 Installer behavior: selected config is synced, so removed repo skills/hooks/prompts/themes/extensions are removed from the target config folder too.
 

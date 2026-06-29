@@ -3,6 +3,8 @@ model_provider = "9router"
 model_reasoning_effort = "xhigh"
 
 [features]
+memories = true
+codex_git_commit = true
 hooks = true
 
 [model_providers.9router]
