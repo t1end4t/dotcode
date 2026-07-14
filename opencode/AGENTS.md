@@ -6,8 +6,10 @@ Rules and commands for this distribution. For the onboarding map see `INDEX.md`.
 
 ```bash
 ./install.sh --core                  # Core config only
+./install.sh --pack=NAME --target=DIR # Shared pack into DIR/.agents/skills
 ./install.sh --all                   # Core + all packs
 ./install.sh --list                  # Show available packs
+./uninstall.sh --core                # Remove core config
 ```
 
 Run from this folder (the installer targets `~/.config/opencode/`).
@@ -19,11 +21,13 @@ After install, quit and restart opencode so config/plugins reload.
 - `core/opencode.json` → `~/.config/opencode/opencode.json`
 - `core/opencode.jsonc` → `~/.config/opencode/opencode.jsonc`
 - `core/tui.json` → `~/.config/opencode/tui.json`
-- Each file is installed only if it exists in `core/`.
+- `core/global-instructions.md` → `~/.config/opencode/AGENTS.md`
+- Core skills and packs reuse the Codex-compatible sources under `../codex/`.
+- Pack skills use `PACK-SKILL` names required by OpenCode's skill schema.
 
-## Sync behavior
+## Install behavior
 
-Install syncs the selected config: anything removed here is removed from
+Install updates selected repo-owned paths without pruning unrelated files from
 `~/.config/opencode/`. Edit here first, then reinstall.
 
 ## Boundaries

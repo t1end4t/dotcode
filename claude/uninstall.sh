@@ -24,15 +24,6 @@ remove_if_exists() {
   fi
 }
 
-copy_file() {
-  local src="$1" dst="$2" label="$3"
-  [ -f "$src" ] || return 0
-  mkdir -p "$(dirname "$dst")"
-  cp "$src" "$dst"
-  echo -e "  ${GREEN}$label${RESET}"
-  COUNT=$((COUNT + 1))
-}
-
 # ── Uninstall core ──────────────────────────────────────────────────
 uninstall_core() {
   local core="$SCRIPT_DIR/core"
@@ -48,7 +39,6 @@ uninstall_core() {
   fi
 
   remove_if_exists "$CLAUDE_HOME/settings.json" "~/.claude/settings.json"
-  copy_file "$core/settings.json" "$CLAUDE_HOME/settings.json" "~/.claude/settings.json"
   remove_if_exists "$CLAUDE_HOME/CLAUDE.md" "~/.claude/CLAUDE.md"
   remove_if_exists "$CLAUDE_HOME/guide-path" "~/.claude/guide-path"
 
@@ -61,14 +51,27 @@ uninstall_core() {
     done
   fi
 
+  # Claude Code commands
+  if [ -d "$core/commands" ]; then
+    for f in "$core/commands"/*; do
+      [ -f "$f" ] || continue
+      remove_if_exists "$CLAUDE_HOME/commands/$(basename "$f")" "~/.claude/commands/$(basename "$f")"
+    done
+  fi
+
   # Environment files
   if [ -d "$core/environment.d" ]; then
     local env_dst="$HOME/.config/environment.d"
     for f in "$core/environment.d"/*; do
       [ -f "$f" ] || continue
       local fname=$(basename "$f")
-      remove_if_exists "$env_dst/$fname" "~/.config/environment.d/$fname"
+      local marker="$CLAUDE_HOME/.dotcode/environment.d/$fname"
+      if [ -f "$marker" ]; then
+        remove_if_exists "$env_dst/$fname" "~/.config/environment.d/$fname"
+        remove_if_exists "$marker" "~/.claude/.dotcode/environment.d/$fname"
+      fi
     done
+    rmdir "$CLAUDE_HOME/.dotcode/environment.d" "$CLAUDE_HOME/.dotcode" 2>/dev/null || true
   fi
 
   # Claude Code core skills

@@ -25,10 +25,9 @@ copy_dir() {
   for f in "$src"/*; do [ -e "$f" ] && has_files=true && break; done
   $has_files || return 0
 
-  rm -rf "$dst"
   mkdir -p "$dst"
-  cp -r "$src"/* "$dst"/
-  echo -e "  ✅  ${GREEN}${label}${RESET} ${DIM}(synced)${RESET}"
+  cp -r "$src"/. "$dst"/
+  echo -e "  ✅  ${GREEN}${label}${RESET} ${DIM}(updated)${RESET}"
   COUNT=$((COUNT + 1))
 }
 
@@ -91,7 +90,6 @@ install_core() {
     # Core skills
     if [ -d "$core/skills" ]; then
       mkdir -p "$CLAUDE_HOME/skills"
-      find "$CLAUDE_HOME/skills" -mindepth 1 -maxdepth 1 -type d ! -name '*:*' -exec rm -rf {} +
       for skill_dir in "$core/skills"/*/; do
         [ -f "$skill_dir/SKILL.md" ] || continue
         local skill_name=$(basename "$skill_dir")
@@ -114,6 +112,8 @@ install_core() {
         echo -e "  ⚠️   ${YELLOW}~/.config/environment.d/$fname${RESET} ${DIM}(already exists, skipped)${RESET}"
       else
         cp "$f" "$env_dst/$fname"
+        mkdir -p "$CLAUDE_HOME/.dotcode/environment.d"
+        touch "$CLAUDE_HOME/.dotcode/environment.d/$fname"
         echo -e "  ✅  ${GREEN}~/.config/environment.d/$fname${RESET}"
         COUNT=$((COUNT + 1))
       fi

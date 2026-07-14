@@ -26,10 +26,9 @@ copy_dir() {
   for f in "$src"/*; do [ -e "$f" ] && has_files=true && break; done
   $has_files || return 0
 
-  rm -rf "$dst"
   mkdir -p "$dst"
-  cp -r "$src"/* "$dst"/
-  echo -e "  ✅  ${GREEN}${label}${RESET} ${DIM}(synced)${RESET}"
+  cp -r "$src"/. "$dst"/
+  echo -e "  ✅  ${GREEN}${label}${RESET} ${DIM}(updated)${RESET}"
   COUNT=$((COUNT + 1))
 }
 
@@ -54,15 +53,14 @@ install_core() {
   echo -e "  ${CYAN}codex${RESET}"
 
   copy_file "$core/global-instructions.md" "$CODEX_HOME/AGENTS.md" "~/.codex/AGENTS.md"
+  copy_file "$core/config.toml"    "$CODEX_HOME/config.toml"    "~/.codex/config.toml"
   copy_file "$core/hooks.json"     "$CODEX_HOME/hooks.json"     "~/.codex/hooks.json"
   copy_dir  "$core/hooks"         "$CODEX_HOME/hooks"         "~/.codex/hooks/"
-  rm -rf "$CODEX_HOME/commands"
   chmod +x "$CODEX_HOME/hooks/"*.sh 2>/dev/null || true
 
   # Core skills
   if [ -d "$core/skills" ]; then
     mkdir -p "$CODEX_HOME/skills"
-    find "$CODEX_HOME/skills" -mindepth 1 -maxdepth 1 -type d ! -name '*:*' -exec rm -rf {} +
     for skill_dir in "$core/skills"/*/; do
       [ -f "$skill_dir/SKILL.md" ] || continue
       local skill_name=$(basename "$skill_dir")

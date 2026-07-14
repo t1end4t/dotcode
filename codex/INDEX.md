@@ -10,7 +10,7 @@ Onboarding map for this distribution (`codex/` → `~/.codex/`).
 
 ## Structure
 
-- `core/` — global instructions, config (`config.toml`, `auth.json`), hooks
+- `core/` — global instructions, config (`config.toml`), hooks
   (`hooks.json` + `core/hooks/`), core skills (`core/skills/`)
 - `packs/` — optional skill bundles
 - `install.sh` / `uninstall.sh` — deploy/remove
@@ -18,15 +18,15 @@ Onboarding map for this distribution (`codex/` → `~/.codex/`).
 
 ## Core
 
-- No hooks, commands, MCP, or plugins configured yet.
-- **Core skills**: `skill-creator`, `mcp-builder`, `commit`
+- **Hooks**: `user-prompt-submit-notification.sh`, `stop-notification.sh`
+- **Core skills**: `commit-commands`, `frontend-design`, `hpc-training`
 
 ## Packs (`packs/`)
 
-- **data-analysis** — statistical-analysis, exploratory-data-analysis, database-lookup, polars, dask, markitdown
-- **deep-learning** — optimize-for-gpu, pytorch-lightning, transformers
-- **office-tools** — docx, pdf, pptx, xlsx
-- **research-workflow** — citation-management, literature-review, paper-lookup, research-lookup
-- **scientific-reasoning** — hypothesis-generation, scientific-brainstorming, scientific-critical-thinking
-- **scientific-visualization** — scientific-visualization, scientific-schematics, matplotlib, seaborn, markdown-mermaid-writing, infographics
-- **scientific-writing** — peer-review, scientific-writing, venue-templates
+- `data-analysis`
+- `deep-learning`
+- `office-tools`
+- `research-workflow`
+- `scientific-reasoning`
+- `scientific-visualization`
+- `scientific-writing`

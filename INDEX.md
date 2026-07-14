@@ -8,7 +8,6 @@ Onboarding map for the shared coding-agent config repo.
 | ------ | ------ | ---------------- | --- |
 | `claude/` | `~/.claude/` | `CLAUDE.md` | `claude/INDEX.md` |
 | `codex/` | `~/.codex/` | `AGENTS.md` | `codex/INDEX.md` |
-| `pi/` | `~/.pi/agent/` | `AGENTS.md` | `pi/INDEX.md` |
 | `opencode/` | `~/.config/opencode/` | `AGENTS.md` | `opencode/INDEX.md` |
 
 ## Read first
@@ -23,7 +22,6 @@ Onboarding map for the shared coding-agent config repo.
 - `install.sh` / `uninstall.sh` — top-level dispatcher
 - `claude/` — Claude Code config distribution
 - `codex/` — Codex CLI config distribution
-- `pi/` — Pi Coding Agent config distribution
 - `opencode/` — OpenCode config distribution
 - `external/` — reference submodules; do not edit unless explicitly asked
 

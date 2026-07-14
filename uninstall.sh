@@ -19,12 +19,12 @@ usage() {
   echo "Usage:"
   echo "  ./uninstall.sh --codex --core"
   echo "  ./uninstall.sh --claude --core"
-  echo "  ./uninstall.sh --pi --core"
+  echo "  ./uninstall.sh --opencode --core"
   echo "  ./uninstall.sh --codex --claude --pack=NAME"
   echo "  ./uninstall.sh --all-agents --all"
   echo ""
-  echo "Agents: --codex --claude --pi --all-agents"
-  echo "Options passed through: --core --mcp --pack=NAME --all -h --help"
+  echo "Agents: --codex --claude --opencode --all-agents"
+  echo "Options passed through: --core --mcp --pack=NAME --target=DIR --all -h --help"
   echo ""
 }
 
@@ -45,11 +45,11 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --codex) add_agent "codex" ;;
     --claude) add_agent "claude" ;;
-    --pi) add_agent "pi" ;;
+    --opencode) add_agent "opencode" ;;
     --all-agents)
       add_agent "codex"
       add_agent "claude"
-      add_agent "pi"
+      add_agent "opencode"
       ;;
     -h|--help)
       usage
@@ -61,7 +61,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ ${#AGENTS[@]} -eq 0 ]; then
-  echo -e "${RED}No agent selected.${RESET} Use --codex, --claude, --pi, or --all-agents."
+  echo -e "${RED}No agent selected.${RESET} Use --codex, --claude, --opencode, or --all-agents."
   echo ""
   usage
   exit 1

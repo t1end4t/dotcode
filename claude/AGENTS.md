@@ -22,10 +22,10 @@ Run from this folder (the installer targets `~/.claude/`).
 - MCP servers installed via `core/mcp.sh`.
 - Packs are under `packs/<pack>/skills/...`; one pack may bundle many skills.
 
-## Sync behavior
+## Install behavior
 
-Install syncs the selected config: anything removed from this folder is also
-removed from `~/.claude/`. Add skills/hooks/prompts here first, then reinstall.
+Install updates selected repo-owned paths without pruning unrelated files from
+`~/.claude/`. Add skills and hooks here first, then reinstall.
 
 ## Boundaries
 

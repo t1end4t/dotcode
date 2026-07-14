@@ -20,12 +20,12 @@ Run from this folder. Core targets `~/.codex/`; packs target `DIR/.agents/skills
 - Core instructions: `core/global-instructions.md` → `~/.codex/AGENTS.md`.
 - Hooks config: `core/hooks.json`; hook scripts in `core/hooks/`.
 - Core skills live in `core/skills/`; pack skills under `packs/<pack>/skills/` and install to repo-local `.agents/skills/`.
-- Config: `core/config.toml`, `core/auth.json`.
+- Config: `core/config.toml`.
 
-## Sync behavior
+## Install behavior
 
-Install syncs the selected config: anything removed from this folder is also
-removed from `~/.codex/`. Add skills/hooks here first, then reinstall.
+Install updates selected repo-owned paths without pruning unrelated files from
+`~/.codex/`. Add skills and hooks here first, then reinstall.
 
 ## Mandatory preflight for setup tasks
 

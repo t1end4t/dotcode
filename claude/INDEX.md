@@ -22,15 +22,14 @@ Onboarding map for this distribution (`claude/` → `~/.claude/`).
 - **Hooks**: `user-prompt-submit-notification.sh`, `stop-notification.sh`
 - **MCP** (`core/mcp.sh`): `fetch`, `context-mode`
 - **Env**: `environment.d/github.conf` (`GITHUB_PERSONAL_ACCESS_TOKEN`, blank)
-- **Plugins** (disabled): `claude-md-management`, `claude-mem`, `commit-commands`, `context7`, `pyright-lsp`, `typescript-lsp`, `rust-analyzer-lsp`, `serena`
-- **Core skills**: `mcp-builder`, `skill-creator`
+- **Core skills**: `commit-commands`, `frontend-design`, `hpc-training`
 
 ## Packs (`packs/`)
 
-- **data-analysis** — statistical-analysis, exploratory-data-analysis, database-lookup, polars, dask, markitdown
-- **deep-learning** — optimize-for-gpu, pytorch-lightning, transformers
-- **office-tools** — docx, pdf, pptx, xlsx
-- **research-workflow** — citation-management, literature-review, paper-lookup, research-lookup
-- **scientific-reasoning** — hypothesis-generation, scientific-brainstorming, scientific-critical-thinking
-- **scientific-visualization** — scientific-visualization, scientific-schematics, matplotlib, seaborn, markdown-mermaid-writing, infographics
-- **scientific-writing** — peer-review, scientific-writing, venue-templates
+- `data-analysis`
+- `deep-learning`
+- `office-tools`
+- `research-workflow`
+- `scientific-reasoning`
+- `scientific-visualization`
+- `scientific-writing`

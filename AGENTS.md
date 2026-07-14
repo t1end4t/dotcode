@@ -12,10 +12,9 @@ agent folder installs into that agent's home config directory.
 ```bash
 ./install.sh --claude --core          # Claude core only
 ./install.sh --codex --core           # Codex core only
-./install.sh --pi --core              # Pi core only
 ./install.sh --opencode --core        # OpenCode core only
 ./install.sh --all-agents --all       # Everything
-./install.sh --claude --pack=NAME     # Single pack
+./install.sh --codex --pack=NAME --target=/path/to/project
 ./install.sh --claude --list          # List packs
 ./uninstall.sh                        # Remove selected installs
 ```
@@ -27,14 +26,16 @@ agent folder installs into that agent's home config directory.
 - `CLAUDE.md` is compatibility glue and should contain only `@AGENTS.md`.
 - Add local docs only for meaningful directories with distinct rules or maps.
 
-## Sync behavior
+## Install behavior
 
-Installer syncs selected config. Removed repo skills/hooks/prompts/themes/extensions
-are removed from the target config folder too.
+Installers update selected repo-owned paths without pruning unrelated files from
+the target config directories.
 
 ## Boundaries
 
-- Do not edit generated target dirs (`~/.codex/`, `~/.claude/`, `~/.pi/agent/`,
+- Do not edit generated target dirs (`~/.codex/`, `~/.claude/`,
   `~/.config/opencode/`) directly; edit this repo and reinstall.
+- Always pass `--target=DIR` for pack installs. Without it, packs install into
+  the current working directory.
 - Do not touch `external/` unless the user explicitly asks. Treat it as reference
   input for sync/preflight only.
