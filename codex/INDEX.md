@@ -19,7 +19,7 @@ Onboarding map for this distribution (`codex/` → `~/.codex/`).
 ## Core
 
 - **Hooks**: `user-prompt-submit-notification.sh`, `stop-notification.sh`
-- **Core skills**: `commit-commands`, `frontend-design`, `hpc-training`
+- **Core skills**: `commit-commands`, `frontend-design`, `hpc-training`, `skillspector`
 
 ## Packs (`packs/`)
 

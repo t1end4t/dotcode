@@ -22,7 +22,7 @@ Onboarding map for this distribution (`claude/` → `~/.claude/`).
 - **Hooks**: `user-prompt-submit-notification.sh`, `stop-notification.sh`
 - **MCP** (`core/mcp.sh`): `fetch`, `context-mode`
 - **Env**: `environment.d/github.conf` (`GITHUB_PERSONAL_ACCESS_TOKEN`, blank)
-- **Core skills**: `commit-commands`, `frontend-design`, `hpc-training`
+- **Core skills**: `commit-commands`, `frontend-design`, `hpc-training`, `skillspector`
 
 ## Packs (`packs/`)
 
