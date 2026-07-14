@@ -1,6 +1,11 @@
 {
   "$schema": "https://unpkg.com/oh-my-opencode-slim@latest/oh-my-opencode-slim.schema.json",
   "preset": "9router",
+  "multiplexer": {
+    "type": "zellij",
+    "zellij_pane_mode": "current-tab",
+    "layout": "main-vertical"
+  },
   "presets": {
     "9router": {
       "orchestrator": { "model": "9router/cx/gpt-5.6-terra(medium)" },
