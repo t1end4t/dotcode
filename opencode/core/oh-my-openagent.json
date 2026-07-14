@@ -1,0 +1,65 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+  "agents": {
+    "sisyphus": {
+      "model": "9router/coding-combo"
+    },
+    "hephaestus": {
+      "model": "9router/coding-combo"
+    },
+    "oracle": {
+      "model": "9router/coding-combo"
+    },
+    "librarian": {
+      "model": "9router/coding-combo"
+    },
+    "explore": {
+      "model": "9router/coding-combo"
+    },
+    "multimodal-looker": {
+      "model": "9router/coding-combo"
+    },
+    "prometheus": {
+      "model": "9router/coding-combo"
+    },
+    "metis": {
+      "model": "9router/coding-combo"
+    },
+    "momus": {
+      "model": "9router/coding-combo"
+    },
+    "atlas": {
+      "model": "9router/coding-combo"
+    },
+    "sisyphus-junior": {
+      "model": "9router/coding-combo"
+    }
+  },
+  "categories": {
+    "visual-engineering": {
+      "model": "9router/coding-combo"
+    },
+    "ultrabrain": {
+      "model": "9router/coding-combo"
+    },
+    "deep": {
+      "model": "9router/coding-combo"
+    },
+    "artistry": {
+      "model": "9router/coding-combo"
+    },
+    "quick": {
+      "model": "9router/coding-combo"
+    },
+    "unspecified-low": {
+      "model": "9router/coding-combo"
+    },
+    "unspecified-high": {
+      "model": "9router/coding-combo"
+    },
+    "writing": {
+      "model": "9router/coding-combo"
+    }
+  }
+}
+

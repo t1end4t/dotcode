@@ -6,7 +6,7 @@ Onboarding map for this distribution (`opencode/` → `~/.config/opencode/`).
 
 1. `AGENTS.md` — operating instructions (install, conventions, boundaries)
 2. `core/opencode.json` — main config
-3. `core/oh-my-opencode-slim.json` — plugin presets and agent models
+3. `core/oh-my-openagent.json` — plugin agent, category, and fallback models
 4. `core/global-instructions.md` — global coding-agent instructions
 5. `core/tui.json` — TUI config
 
@@ -20,7 +20,7 @@ Onboarding map for this distribution (`opencode/` → `~/.config/opencode/`).
 ## Core
 
 - **Agent**: `explorer`
-- **Plugin**: `oh-my-opencode-slim`
+- **Plugin**: `oh-my-openagent`
 - **Core skills**: `commit-commands`, `frontend-design`, `hpc-training`
 
 ## Packs
