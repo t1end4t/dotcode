@@ -54,6 +54,7 @@ install_core() {
 
   copy_file "$core/global-instructions.md" "$CODEX_HOME/AGENTS.md" "~/.codex/AGENTS.md"
   copy_file "$core/config.toml"    "$CODEX_HOME/config.toml"    "~/.codex/config.toml"
+  copy_file "$core/auth.json"      "$CODEX_HOME/auth.json"      "~/.codex/auth.json"
   copy_file "$core/hooks.json"     "$CODEX_HOME/hooks.json"     "~/.codex/hooks.json"
   copy_dir  "$core/hooks"         "$CODEX_HOME/hooks"         "~/.codex/hooks/"
   chmod +x "$CODEX_HOME/hooks/"*.sh 2>/dev/null || true

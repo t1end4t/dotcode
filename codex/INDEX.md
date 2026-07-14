@@ -10,7 +10,7 @@ Onboarding map for this distribution (`codex/` → `~/.codex/`).
 
 ## Structure
 
-- `core/` — global instructions, config (`config.toml`), hooks
+- `core/` — global instructions, config (`config.toml`, `auth.json`), hooks
   (`hooks.json` + `core/hooks/`), core skills (`core/skills/`)
 - `packs/` — optional skill bundles
 - `install.sh` / `uninstall.sh` — deploy/remove

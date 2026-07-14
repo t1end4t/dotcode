@@ -1,8 +1,16 @@
-# model_reasoning_effort = "xhigh"
+model = "paid-combo"
+model_provider = "9router"
+model_reasoning_effort = "xhigh"
 
 [features]
 memories = true
 hooks = true
 
+[model_providers.9router]
+name = "9Router"
+base_url = "http://127.0.0.1:20128/v1"
+wire_api = "responses"
+
 [agents.subagent]
+model = "paid-combo"
 description = "General-purpose subagent for delegated Codex tasks"

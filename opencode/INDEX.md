@@ -19,7 +19,7 @@ Onboarding map for this distribution (`opencode/` → `~/.config/opencode/`).
 ## Core
 
 - **Agent**: `explorer`
-- **Plugin**: `oh-my-openagent`
+- **Plugin**: `oh-my-opencode-slim`
 - **Core skills**: `commit-commands`, `frontend-design`, `hpc-training`
 
 ## Packs

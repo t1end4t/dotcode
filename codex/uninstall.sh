@@ -33,6 +33,7 @@ uninstall_core() {
 
   remove_if_exists "$CODEX_HOME/AGENTS.md"   "~/.codex/AGENTS.md"
   remove_if_exists "$CODEX_HOME/config.toml" "~/.codex/config.toml"
+  remove_if_exists "$CODEX_HOME/auth.json"   "~/.codex/auth.json"
   remove_if_exists "$CODEX_HOME/hooks.json"  "~/.codex/hooks.json"
 
   # Hooks

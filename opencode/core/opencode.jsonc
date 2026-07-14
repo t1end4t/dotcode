@@ -1,5 +1,5 @@
 {
-  "plugin": ["oh-my-openagent@4.1.2"],
+  "plugin": ["oh-my-opencode-slim"],
   "$schema": "https://opencode.ai/config.json",
   "autoupdate": true,
 }

@@ -20,7 +20,7 @@ Run from this folder. Core targets `~/.codex/`; packs target `DIR/.agents/skills
 - Core instructions: `core/global-instructions.md` → `~/.codex/AGENTS.md`.
 - Hooks config: `core/hooks.json`; hook scripts in `core/hooks/`.
 - Core skills live in `core/skills/`; pack skills under `packs/<pack>/skills/` and install to repo-local `.agents/skills/`.
-- Config: `core/config.toml`.
+- Config: `core/config.toml`, `core/auth.json`.
 
 ## Install behavior
 
