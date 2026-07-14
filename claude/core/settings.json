@@ -1,12 +1,15 @@
 {
   "hasCompletedOnboarding": true,
+  "permissions": {
+    "defaultMode": "plan"
+  },
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:20128/v1",
     "ANTHROPIC_AUTH_TOKEN": "sk_9router",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "thinking-combo",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "thinking-combo",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "thinking-combo",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL": "thinking-combo"
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "cc/claude-fable-5(max)",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "cc/claude-sonnet-5(medium)",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "cx/gpt-5.4-mini-fast(low)",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "cc/claude-fable-5(max)"
   },
   "hooks": {
     "UserPromptSubmit": [
