@@ -1,4 +1,4 @@
-model = "paid-combo"
+model = "coding-combo"
 model_provider = "9router"
 model_reasoning_effort = "xhigh"
 
@@ -12,5 +12,5 @@ base_url = "http://127.0.0.1:20128/v1"
 wire_api = "responses"
 
 [agents.subagent]
-model = "paid-combo"
+model = "coding-combo"
 description = "General-purpose subagent for delegated Codex tasks"

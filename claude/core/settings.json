@@ -3,9 +3,9 @@
   "env": {
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:20128/v1",
     "ANTHROPIC_AUTH_TOKEN": "sk_9router",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "paid-combo",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "paid-combo",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "paid-combo"
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "thinking-combo",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "thinking-combo",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "thinking-combo"
   },
   "hooks": {
     "UserPromptSubmit": [

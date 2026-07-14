@@ -8,8 +8,8 @@
         "apiKey": "sk_9router"
       },
       "models": {
-        "paid-combo": {
-          "name": "paid-combo",
+        "coding-combo": {
+          "name": "coding-combo",
           "modalities": {
             "input": [
               "text",
@@ -25,12 +25,12 @@
   },
   "lsp": true,
   "formatter": true,
-  "model": "9router/paid-combo",
+  "model": "9router/coding-combo",
   "agent": {
     "explorer": {
       "description": "Fast explorer subagent for codebase exploration",
       "mode": "subagent",
-      "model": "9router/paid-combo"
+      "model": "9router/coding-combo"
     }
   }
 }
