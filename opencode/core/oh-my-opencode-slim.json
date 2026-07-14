@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/oh-my-opencode-slim@latest/oh-my-opencode-slim.schema.json",
+  "preset": "9router",
+  "presets": {
+    "9router": {
+      "orchestrator": { "model": "9router/cx/gpt-5.6-terra(medium)" },
+      "oracle": { "model": "9router/cx/gpt-5.6-sol(high)" },
+      "librarian": { "model": "9router/cx/gpt-5.6-luna(low)" },
+      "explorer": { "model": "9router/cx/gpt-5.6-luna(low)" },
+      "designer": { "model": "9router/cx/gpt-5.6-luna(medium)" },
+      "fixer": { "model": "9router/cx/gpt-5.6-luna(medium)" }
+    }
+  }
+}

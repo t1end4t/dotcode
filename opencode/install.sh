@@ -55,9 +55,9 @@ install_core() {
   copy_file "$core/global-instructions.md" "$OPENCODE_HOME/AGENTS.md" "~/.config/opencode/AGENTS.md"
   copy_file "$core/opencode.json"  "$OPENCODE_HOME/opencode.json"  "~/.config/opencode/opencode.json"
   copy_file "$core/opencode.jsonc" "$OPENCODE_HOME/opencode.jsonc" "~/.config/opencode/opencode.jsonc"
-  # Remove the config owned by the retired Slim integration during migration.
-  rm -f "$OPENCODE_HOME/oh-my-opencode-slim.json"
-  copy_file "$core/oh-my-openagent.json" "$OPENCODE_HOME/oh-my-openagent.json" "~/.config/opencode/oh-my-openagent.json"
+  # Remove the retired plugin config during migration.
+  rm -f "$OPENCODE_HOME/oh-my-openagent.json"
+  copy_file "$core/oh-my-opencode-slim.json" "$OPENCODE_HOME/oh-my-opencode-slim.json" "~/.config/opencode/oh-my-opencode-slim.json"
   copy_file "$core/tui.json"       "$OPENCODE_HOME/tui.json"       "~/.config/opencode/tui.json"
   copy_dir  "$core/plugins"        "$OPENCODE_HOME/plugins"        "~/.config/opencode/plugins/"
 

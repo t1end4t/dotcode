@@ -1,34 +1,18 @@
 model = "coding-combo"
 model_provider = "9router"
-model_reasoning_effort = "xhigh"
 
 [features]
 memories = true
 hooks = true
-web_search = true
 
 [model_providers.9router]
 name = "9Router"
 base_url = "http://127.0.0.1:20128/v1"
 wire_api = "responses"
 
-# codex --profile debug  (deep debugging)
-[profiles.debug]
-model = "cx/gpt-5.5(high)"
-model_provider = "9router"
-model_reasoning_effort = "high"
-approval_policy = "on-request"
-
-# codex --profile ops  (install, scripts, quick fixes)
-[profiles.ops]
-model = "cx/gpt-5.4-mini-fast(low)"
-model_provider = "9router"
-approval_policy = "never"
-sandbox_mode = "workspace-write"
-
 [sandbox_workspace_write]
 network_access = true
 
 [agents.subagent]
-model = "cx/gpt-5.5(medium)"
+model = "coding-combo"
 description = "General-purpose subagent for delegated Codex tasks"
