@@ -5,7 +5,8 @@
     "ANTHROPIC_AUTH_TOKEN": "sk_9router",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "thinking-combo",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "thinking-combo",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "thinking-combo"
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "thinking-combo",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "thinking-combo"
   },
   "hooks": {
     "UserPromptSubmit": [
