@@ -55,6 +55,7 @@ install_core() {
   copy_file "$core/global-instructions.md" "$OPENCODE_HOME/AGENTS.md" "~/.config/opencode/AGENTS.md"
   copy_file "$core/opencode.json"  "$OPENCODE_HOME/opencode.json"  "~/.config/opencode/opencode.json"
   copy_file "$core/opencode.jsonc" "$OPENCODE_HOME/opencode.jsonc" "~/.config/opencode/opencode.jsonc"
+  copy_file "$core/oh-my-opencode-slim.json" "$OPENCODE_HOME/oh-my-opencode-slim.json" "~/.config/opencode/oh-my-opencode-slim.json"
   copy_file "$core/tui.json"       "$OPENCODE_HOME/tui.json"       "~/.config/opencode/tui.json"
   copy_dir  "$core/plugins"        "$OPENCODE_HOME/plugins"        "~/.config/opencode/plugins/"
 

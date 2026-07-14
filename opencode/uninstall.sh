@@ -33,6 +33,7 @@ uninstall_core() {
   remove_if_exists "$OPENCODE_HOME/AGENTS.md" "~/.config/opencode/AGENTS.md"
   remove_if_exists "$OPENCODE_HOME/opencode.json" "~/.config/opencode/opencode.json"
   remove_if_exists "$OPENCODE_HOME/opencode.jsonc" "~/.config/opencode/opencode.jsonc"
+  remove_if_exists "$OPENCODE_HOME/oh-my-opencode-slim.json" "~/.config/opencode/oh-my-opencode-slim.json"
   remove_if_exists "$OPENCODE_HOME/tui.json" "~/.config/opencode/tui.json"
 
   if [ -d "$core/plugins" ]; then

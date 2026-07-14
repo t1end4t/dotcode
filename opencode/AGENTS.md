@@ -20,6 +20,7 @@ After install, quit and restart opencode so config/plugins reload.
 
 - `core/opencode.json` → `~/.config/opencode/opencode.json`
 - `core/opencode.jsonc` → `~/.config/opencode/opencode.jsonc`
+- `core/oh-my-opencode-slim.json` → `~/.config/opencode/oh-my-opencode-slim.json`
 - `core/tui.json` → `~/.config/opencode/tui.json`
 - `core/global-instructions.md` → `~/.config/opencode/AGENTS.md`
 - Core skills and packs reuse the Codex-compatible sources under `../codex/`.
