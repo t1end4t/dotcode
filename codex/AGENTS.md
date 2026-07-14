@@ -27,25 +27,6 @@ Run from this folder. Core targets `~/.codex/`; packs target `DIR/.agents/skills
 Install updates selected repo-owned paths without pruning unrelated files from
 `~/.codex/`. Add skills and hooks here first, then reinstall.
 
-## Mandatory preflight for setup tasks
-
-Before any change touching Codex setup (`.codex/`, `.agents/`, subagents,
-skills, hooks, MCP, marketplace/plugins, memories, commands/workflows), read:
-
-1. `../external/codex-cli-best-practice/AGENTS.md`
-2. The matching file under `../external/codex-cli-best-practice/best-practice/`:
-
-   | Topic | File |
-   | ----- | ---- |
-   | Subagents | `codex-subagents.md` |
-   | Skills | `codex-skills.md` |
-   | Hooks | `codex-hooks.md` |
-   | MCP | `codex-mcp.md` |
-   | Config | `codex-config.md` |
-   | Marketplace/plugins | `codex-marketplace.md` |
-   | Memory | `codex-memory.md` |
-   | AGENTS.md guidance | `codex-agents-md.md` |
-
 ## Boundaries
 
 - Do not edit `~/.codex/` directly; edit the source here and reinstall.

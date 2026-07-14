@@ -40,6 +40,5 @@ Installed by agent-specific installers when supported.
 ## External reference repos
 
 - `external/claude-code-best-practice`
-- `external/codex-cli-best-practice`
 - `external/claude-skills`
 - `external/scientific-agent-skills`
