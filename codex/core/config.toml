@@ -1,5 +1,6 @@
 model = "coding-combo"
 model_provider = "9router"
+model_reasoning_effort = "high"
 
 [features]
 memories = true

@@ -8,22 +8,13 @@
   },
   "presets": {
     "hybrid": {
-      "orchestrator": { "model": "9router/cx/gpt-5.6-terra(medium)" },
-      "oracle": { "model": "9router/cx/gpt-5.6-sol(max)" },
+      "orchestrator": { "model": "9router/cx/gpt-5.6-terra" },
+      "oracle": { "model": "9router/cx/gpt-5.6-sol" },
       "librarian": { "model": "9router/ocg/deepseek-v4-flash" },
       "explorer": { "model": "9router/ocg/deepseek-v4-flash" },
-      "designer": { "model": "9router/cx/gpt-5.6-terra(medium)" },
-      "fixer": { "model": "9router/cx/gpt-5.6-terra(medium)" },
-      "observer": { "model": "9router/cx/gpt-5.6-terra(medium)" }
-    }
-  },
-  "council": {
-    "presets": {
-      "default": {
-        "alpha": { "model": "9router/cx/gpt-5.6-terra(medium)" },
-        "beta": { "model": "9router/cx/gpt-5.6-sol(max)" },
-        "gamma": { "model": "9router/ocg/glm-5.2" }
-      }
+      "designer": { "model": "9router/cx/gpt-5.6-terra" },
+      "fixer": { "model": "9router/cx/gpt-5.6-terra" },
+      "observer": { "model": "9router/cx/gpt-5.6-terra" }
     }
   },
   "disabled_agents": [],

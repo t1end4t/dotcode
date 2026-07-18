@@ -42,14 +42,9 @@ uninstall_core() {
   remove_if_exists "$CLAUDE_HOME/CLAUDE.md" "~/.claude/CLAUDE.md"
   remove_if_exists "$CLAUDE_HOME/guide-path" "~/.claude/guide-path"
 
-  # External submodule path pointers
-  if [ -d "$SCRIPT_DIR/../external" ]; then
-    for ext_dir in "$SCRIPT_DIR/../external"/*/; do
-      [ -d "$ext_dir" ] || continue
-      local ext_name=$(basename "$ext_dir")
-      remove_if_exists "$CLAUDE_HOME/${ext_name}-path" "~/.claude/${ext_name}-path"
-    done
-  fi
+  for pointer_name in codex-skills claude-code-best-practice claude-skills scientific-agent-skills; do
+    remove_if_exists "$CLAUDE_HOME/${pointer_name}-path" "~/.claude/${pointer_name}-path"
+  done
 
   # Claude Code commands
   if [ -d "$core/commands" ]; then

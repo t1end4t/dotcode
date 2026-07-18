@@ -127,16 +127,7 @@ install_core() {
     COUNT=$((COUNT + 1))
   fi
 
-  # External submodule path pointers (read-only references, not installed)
-  if [ -d "$SCRIPT_DIR/../external" ]; then
-    for ext_dir in "$SCRIPT_DIR/../external"/*/; do
-      [ -d "$ext_dir" ] || continue
-      local ext_name=$(basename "$ext_dir")
-      echo "$ext_dir" > "$CLAUDE_HOME/${ext_name}-path"
-      echo -e "  ✅  ${GREEN}~/.claude/${ext_name}-path${RESET}"
-      COUNT=$((COUNT + 1))
-    done
-  fi
+  rm -f "$CLAUDE_HOME"/{codex-skills,claude-code-best-practice,claude-skills,scientific-agent-skills}-path
 
   echo ""
 }

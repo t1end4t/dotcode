@@ -30,8 +30,11 @@
             ]
           }
         },
-        "cx/gpt-5.6-terra(medium)": {
-          "name": "cx/gpt-5.6-terra(medium)",
+        "cx/gpt-5.6-terra": {
+          "name": "cx/gpt-5.6-terra",
+          "options": {
+            "reasoningEffort": "high"
+          },
           "modalities": {
             "input": [
               "text",
@@ -42,8 +45,11 @@
             ]
           }
         },
-        "cx/gpt-5.6-sol(max)": {
-          "name": "cx/gpt-5.6-sol(max)",
+        "cx/gpt-5.6-sol": {
+          "name": "cx/gpt-5.6-sol",
+          "options": {
+            "reasoningEffort": "high"
+          },
           "modalities": {
             "input": [
               "text",
@@ -59,7 +65,7 @@
   },
   "lsp": true,
   "formatter": true,
-  "model": "9router/cx/gpt-5.6-terra(medium)",
+  "model": "9router/cx/gpt-5.6-terra",
   "agent": {
     "explorer": {
       "description": "Fast explorer subagent for codebase exploration",
