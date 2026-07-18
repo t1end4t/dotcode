@@ -8,32 +8,19 @@
         "apiKey": "sk_9router"
       },
       "models": {
-        "cc/claude-fable-5(max)": {
-          "name": "cc/claude-fable-5(max)",
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cc/claude-sonnet-5(medium)": {
-          "name": "cc/claude-sonnet-5(medium)",
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
         "ocg/glm-5.2": {
           "name": "ocg/glm-5.2",
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        },
+        "ocg/deepseek-v4-flash": {
+          "name": "ocg/deepseek-v4-flash",
           "modalities": {
             "input": [
               "text"
@@ -55,71 +42,12 @@
             ]
           }
         },
-        "cx/gpt-5.6-sol(high)": {
-          "name": "cx/gpt-5.6-sol(high)",
+        "cx/gpt-5.6-sol(max)": {
+          "name": "cx/gpt-5.6-sol(max)",
           "modalities": {
             "input": [
               "text",
               "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cx/gpt-5.6-luna(low)": {
-          "name": "cx/gpt-5.6-luna(low)",
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cx/gpt-5.6-luna(medium)": {
-          "name": "cx/gpt-5.6-luna(medium)",
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cx/gpt-5.5(medium)": {
-          "name": "cx/gpt-5.5(medium)",
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cx/gpt-5.5(high)": {
-          "name": "cx/gpt-5.5(high)",
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cx/gpt-5.4-mini(low)": {
-          "name": "cx/gpt-5.4-mini(low)",
-          "modalities": {
-            "input": [
-              "text"
             ],
             "output": [
               "text"
@@ -136,7 +64,7 @@
     "explorer": {
       "description": "Fast explorer subagent for codebase exploration",
       "mode": "subagent",
-      "model": "9router/cx/gpt-5.6-luna(low)"
+      "model": "9router/ocg/deepseek-v4-flash"
     }
   }
 }

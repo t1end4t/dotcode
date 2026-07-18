@@ -1,19 +1,31 @@
 {
   "$schema": "https://unpkg.com/oh-my-opencode-slim@latest/oh-my-opencode-slim.schema.json",
-  "preset": "9router",
+  "preset": "hybrid",
   "multiplexer": {
     "type": "zellij",
     "zellij_pane_mode": "current-tab",
     "layout": "main-vertical"
   },
   "presets": {
-    "9router": {
+    "hybrid": {
       "orchestrator": { "model": "9router/cx/gpt-5.6-terra(medium)" },
-      "oracle": { "model": "9router/cx/gpt-5.6-sol(high)" },
-      "librarian": { "model": "9router/cx/gpt-5.6-luna(low)" },
-      "explorer": { "model": "9router/cx/gpt-5.6-luna(low)" },
-      "designer": { "model": "9router/cx/gpt-5.6-luna(medium)" },
-      "fixer": { "model": "9router/cx/gpt-5.6-luna(medium)" }
+      "oracle": { "model": "9router/cx/gpt-5.6-sol(max)" },
+      "librarian": { "model": "9router/ocg/deepseek-v4-flash" },
+      "explorer": { "model": "9router/ocg/deepseek-v4-flash" },
+      "designer": { "model": "9router/cx/gpt-5.6-terra(medium)" },
+      "fixer": { "model": "9router/cx/gpt-5.6-terra(medium)" },
+      "observer": { "model": "9router/cx/gpt-5.6-terra(medium)" }
     }
-  }
+  },
+  "council": {
+    "presets": {
+      "default": {
+        "alpha": { "model": "9router/cx/gpt-5.6-terra(medium)" },
+        "beta": { "model": "9router/cx/gpt-5.6-sol(max)" },
+        "gamma": { "model": "9router/ocg/glm-5.2" }
+      }
+    }
+  },
+  "disabled_agents": [],
+  "image_routing": "auto"
 }
