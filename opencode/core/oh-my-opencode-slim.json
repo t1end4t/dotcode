@@ -12,7 +12,7 @@
       "oracle": { "model": "9router/cc/claude-opus-5(high)" },
       "librarian": { "model": "9router/cx/gpt-5.6-luna(medium)" },
       "explorer": { "model": "9router/cx/gpt-5.6-luna(low)" },
-      "designer": { "model": "9router/cc/claude-sonnet-5" },
+      "designer": { "model": "9router/cc/claude-sonnet-5(medium)" },
       "fixer": { "model": "9router/cx/gpt-5.6-sol(high)" },
       "observer": { "model": "9router/cx/gpt-5.6-luna(low)" }
     }
