@@ -1,6 +1,8 @@
 model = "coding-combo"
 model_provider = "9router"
 model_reasoning_effort = "high"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
 
 [features]
 memories = true

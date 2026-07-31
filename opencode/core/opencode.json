@@ -125,7 +125,7 @@
   },
   "lsp": true,
   "formatter": true,
-  "model": "9router/cx/gpt-5.6-terra",
+  "model": "9router/cc/claude-sonnet-5",
   "agent": {
     "explorer": {
       "description": "Fast explorer subagent for codebase exploration",
