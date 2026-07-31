@@ -8,30 +8,8 @@
         "apiKey": "sk_9router"
       },
       "models": {
-        "ocg/glm-5.2": {
-          "name": "ocg/glm-5.2",
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "ocg/deepseek-v4-flash": {
-          "name": "ocg/deepseek-v4-flash",
-          "modalities": {
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cx/gpt-5.6-terra": {
-          "name": "cx/gpt-5.6-terra",
+        "cc/claude-opus-5(high)": {
+          "name": "cc/claude-opus-5",
           "options": {
             "reasoningEffort": "high"
           },
@@ -45,8 +23,8 @@
             ]
           }
         },
-        "cx/gpt-5.6-sol": {
-          "name": "cx/gpt-5.6-sol",
+        "cx/gpt-5.6-terra(high)": {
+          "name": "cx/gpt-5.6-terra",
           "options": {
             "reasoningEffort": "high"
           },
@@ -125,12 +103,12 @@
   },
   "lsp": true,
   "formatter": true,
-  "model": "9router/cc/claude-sonnet-5",
+  "model": "9router/cx/gpt-5.6-terra(high)",
   "agent": {
     "explorer": {
       "description": "Fast explorer subagent for codebase exploration",
       "mode": "subagent",
-      "model": "9router/ocg/deepseek-v4-flash"
+      "model": "9router/cx/gpt-5.6-luna(low)"
     }
   }
 }
