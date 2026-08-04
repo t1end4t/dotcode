@@ -23,22 +23,10 @@ Onboarding map for the shared coding-agent config repo.
 - `claude/` — Claude Code config distribution
 - `codex/` — Codex CLI config distribution
 - `opencode/` — OpenCode config distribution
-- `external/` — reference submodules; do not edit unless explicitly asked
+- `external/claude-skills/` — sole shared skill source
 
-## Shared packs
+## Shared skills
 
-Installed by agent-specific installers when supported.
+All agents install skills directly from `external/claude-skills/skills/`.
 
-- `data-analysis`
-- `deep-learning`
-- `office-tools`
-- `research-workflow`
-- `scientific-reasoning`
-- `scientific-visualization`
-- `scientific-writing`
-
-## External reference repos
-
-- `external/claude-code-best-practice`
 - `external/claude-skills`
-- `external/scientific-agent-skills`

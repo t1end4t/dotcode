@@ -20,8 +20,6 @@ usage() {
   echo "  ./install.sh --codex --core"
   echo "  ./install.sh --claude --core"
   echo "  ./install.sh --opencode --core"
-  echo "  ./install.sh --codex --pack=research-workflow --target=/path/to/project"
-  echo "  ./install.sh --codex --claude --pack=research-workflow"
   echo "  ./install.sh --all-agents --all"
   echo "  ./install.sh --codex --list"
   echo ""
@@ -32,7 +30,8 @@ usage() {
   echo "  --all-agents  Target every supported agent"
   echo ""
   echo "Options passed through to agent installers:"
-  echo "  --core --mcp --pack=NAME --target=DIR --all --list -h --help"
+  echo "  --core --all --list -h --help"
+  echo "  --mcp  Claude only"
   echo ""
 }
 
@@ -76,7 +75,7 @@ if [ ${#AGENTS[@]} -eq 0 ]; then
 fi
 
 if [ ${#ARGS[@]} -eq 0 ]; then
-  echo -e "${YELLOW}No install option selected.${RESET} Pass --core, --pack=NAME, --all, or --list."
+  echo -e "${YELLOW}No install option selected.${RESET} Pass --core, --all, or --list."
   exit 1
 fi
 

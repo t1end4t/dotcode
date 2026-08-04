@@ -1,7 +1,0 @@
-[pack]
-name = "office-tools"
-description = "Create, read, and edit PDF, Word, PowerPoint, and Excel files"
-version = "1.0.0"
-
-[claude]
-skills = "skills"

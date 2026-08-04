@@ -14,8 +14,7 @@ agent folder installs into that agent's home config directory.
 ./install.sh --codex --core           # Codex core only
 ./install.sh --opencode --core        # OpenCode core only
 ./install.sh --all-agents --all       # Everything
-./install.sh --codex --pack=NAME --target=/path/to/project
-./install.sh --claude --list          # List packs
+./install.sh --claude --list          # List shared skills
 ./uninstall.sh                        # Remove selected installs
 ```
 
@@ -28,14 +27,11 @@ agent folder installs into that agent's home config directory.
 
 ## Install behavior
 
-Installers update selected repo-owned paths without pruning unrelated files from
-the target config directories.
+Core installs update selected repo-owned paths and copy skills from
+`external/claude-skills/skills/` without pruning unrelated target files.
 
 ## Boundaries
 
 - Do not edit generated target dirs (`~/.codex/`, `~/.claude/`,
   `~/.config/opencode/`) directly; edit this repo and reinstall.
-- Always pass `--target=DIR` for pack installs. Without it, packs install into
-  the current working directory.
-- Do not touch `external/` unless the user explicitly asks. Treat it as reference
-  input for sync/preflight only.
+- Do not hand-edit `external/claude-skills`; update the submodule instead.

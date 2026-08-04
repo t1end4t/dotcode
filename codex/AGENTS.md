@@ -5,30 +5,27 @@ Rules and commands for this distribution. For the onboarding map see `INDEX.md`.
 ## Commands
 
 ```bash
-./install.sh --core                  # Core only (AGENTS.md, config, hooks, skills)
-./install.sh --pack=NAME             # Single pack
-./install.sh --pack=NAME --target=DIR # Pack into DIR/.agents/skills
-./install.sh --all                   # Core + all packs
-./install.sh --list                  # Show available packs
+./install.sh --core                  # Core config + shared Claude skills
+./install.sh --all                   # Same as --core
+./install.sh --list                  # Show shared Claude skills
 ./uninstall.sh                       # Remove from ~/.codex
 ```
 
-Run from this folder. Core targets `~/.codex/`; packs target `DIR/.agents/skills` (`$PWD` by default).
+Run from this folder. Installs target `~/.codex/`.
 
 ## Conventions
 
 - Core instructions: `core/global-instructions.md` → `~/.codex/AGENTS.md`.
 - Hooks config: `core/hooks.json`; hook scripts in `core/hooks/`.
-- Core skills live in `core/skills/`; pack skills under `packs/<pack>/skills/` and install to repo-local `.agents/skills/`.
+- Skills come only from `../external/claude-skills/skills/`.
 - Config: `core/config.toml`, `core/auth.json`.
 
 ## Install behavior
 
 Install updates selected repo-owned paths without pruning unrelated files from
-`~/.codex/`. Add skills and hooks here first, then reinstall.
+`~/.codex/`. Update local config here or the skill submodule, then reinstall.
 
 ## Boundaries
 
 - Do not edit `~/.codex/` directly; edit the source here and reinstall.
-- Skill packs under `packs/` originate from `external/` repos — re-sync, do not
-  hand-edit synced skill files.
+- Do not hand-edit `external/claude-skills`; update the submodule instead.

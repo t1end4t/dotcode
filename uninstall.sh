@@ -20,11 +20,11 @@ usage() {
   echo "  ./uninstall.sh --codex --core"
   echo "  ./uninstall.sh --claude --core"
   echo "  ./uninstall.sh --opencode --core"
-  echo "  ./uninstall.sh --codex --claude --pack=NAME"
   echo "  ./uninstall.sh --all-agents --all"
   echo ""
   echo "Agents: --codex --claude --opencode --all-agents"
-  echo "Options passed through: --core --mcp --pack=NAME --target=DIR --all -h --help"
+  echo "Options passed through: --core --all -h --help"
+  echo "Claude only: --mcp"
   echo ""
 }
 
@@ -68,7 +68,7 @@ if [ ${#AGENTS[@]} -eq 0 ]; then
 fi
 
 if [ ${#ARGS[@]} -eq 0 ]; then
-  echo -e "${YELLOW}No uninstall option selected.${RESET} Pass --core, --pack=NAME, or --all."
+  echo -e "${YELLOW}No uninstall option selected.${RESET} Pass --core or --all."
   exit 1
 fi
 

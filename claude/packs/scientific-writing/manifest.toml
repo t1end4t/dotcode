@@ -1,7 +1,0 @@
-[pack]
-name = "scientific-writing"
-description = "Scientific writing and publication tools"
-version = "1.0.0"
-
-[claude]
-skills = "skills"

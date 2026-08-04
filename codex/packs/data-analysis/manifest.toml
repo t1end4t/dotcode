@@ -1,7 +1,0 @@
-[pack]
-name = "data-analysis"
-description = "Data analysis, statistics, ETL, and scientific file inspection"
-version = "1.0.0"
-
-[claude]
-skills = "skills"

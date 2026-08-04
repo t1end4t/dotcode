@@ -2,18 +2,15 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKILLS_SOURCE="$SCRIPT_DIR/../external/claude-skills/skills"
 
 BOLD="\033[1m"
-GREEN="\033[0;32m"
 YELLOW="\033[0;33m"
 CYAN="\033[0;36m"
 RED="\033[0;31m"
-DIM="\033[2m"
 RESET="\033[0m"
 
 CODEX_HOME="$HOME/.codex"
-PACK_TARGET_DIR="$PWD"
-
 COUNT=0
 
 remove_if_exists() {
@@ -25,123 +22,58 @@ remove_if_exists() {
   fi
 }
 
-# ── Uninstall core ───────────────────────────────────────────────
 uninstall_core() {
   local core="$SCRIPT_DIR/core"
   echo -e "${BOLD}Uninstalling core...${RESET}"
   echo ""
 
-  remove_if_exists "$CODEX_HOME/AGENTS.md"   "~/.codex/AGENTS.md"
+  remove_if_exists "$CODEX_HOME/AGENTS.md" "~/.codex/AGENTS.md"
   remove_if_exists "$CODEX_HOME/config.toml" "~/.codex/config.toml"
-  remove_if_exists "$CODEX_HOME/auth.json"   "~/.codex/auth.json"
-  remove_if_exists "$CODEX_HOME/hooks.json"  "~/.codex/hooks.json"
+  remove_if_exists "$CODEX_HOME/auth.json" "~/.codex/auth.json"
+  remove_if_exists "$CODEX_HOME/hooks.json" "~/.codex/hooks.json"
 
-  # Hooks
   if [ -d "$core/hooks" ]; then
-    for f in "$core/hooks"/*; do
-      [ -f "$f" ] || continue
-      remove_if_exists "$CODEX_HOME/hooks/$(basename "$f")" "~/.codex/hooks/$(basename "$f")"
+    for file in "$core/hooks"/*; do
+      [ -f "$file" ] || continue
+      remove_if_exists "$CODEX_HOME/hooks/$(basename "$file")" "~/.codex/hooks/$(basename "$file")"
     done
   fi
 
-  # Core skills
-  if [ -d "$core/skills" ]; then
-    for skill_dir in "$core/skills"/*/; do
-      [ -d "$skill_dir" ] || continue
-      local skill_name=$(basename "$skill_dir")
+  if [ -d "$SKILLS_SOURCE" ]; then
+    for skill_dir in "$SKILLS_SOURCE"/*/; do
+      [ -f "$skill_dir/SKILL.md" ] || continue
+      local skill_name
+      skill_name=$(basename "$skill_dir")
       remove_if_exists "$CODEX_HOME/skills/$skill_name" "~/.codex/skills/$skill_name/"
     done
   fi
 
-  for pointer_name in codex-skills claude-code-best-practice claude-skills scientific-agent-skills; do
-    remove_if_exists "$CODEX_HOME/${pointer_name}-path" "~/.codex/${pointer_name}-path"
-  done
-
   echo ""
 }
 
-# ── Uninstall a pack ───────────────────────────────────────────────
-uninstall_pack() {
-  local pack_name="$1"
-  local pack_dir="$SCRIPT_DIR/packs/$pack_name"
-  local skills_home="$PACK_TARGET_DIR/.agents/skills"
-
-  if [ ! -d "$pack_dir" ]; then
-    echo -e "  ${RED}Pack '$pack_name' not found${RESET}"
-    return 1
-  fi
-
-  echo -e "${BOLD}Uninstalling pack: ${CYAN}$pack_name${RESET}"
-  echo ""
-
-  # Skills (repo-local, match pack:skill naming from install)
-  if [ -d "$pack_dir/skills" ]; then
-    for skill_dir in "$pack_dir/skills"/*/; do
-      [ -d "$skill_dir" ] || continue
-      local skill_name=$(basename "$skill_dir")
-      remove_if_exists "$skills_home/${pack_name}:${skill_name}" "$skills_home/${pack_name}:${skill_name}/"
-    done
-  fi
-
-  # Hooks
-  if [ -d "$pack_dir/hooks" ]; then
-    for f in "$pack_dir/hooks"/*; do
-      [ -f "$f" ] || continue
-      remove_if_exists "$CODEX_HOME/hooks/$(basename "$f")" "~/.codex/hooks/$(basename "$f")"
-    done
-  fi
-
-  echo ""
-}
-
-# ── Usage ───────────────────────────────────────────────────────────
 usage() {
   echo -e "${BOLD}dotcodex uninstall${RESET}"
   echo ""
   echo "Usage:"
-  echo "  ./uninstall.sh --core                   Uninstall Layer 0"
-  echo "  ./uninstall.sh --pack=NAME              Uninstall a specific pack"
-  echo "  ./uninstall.sh --pack=NAME --target=DIR Uninstall pack skills from DIR/.agents/skills"
-  echo "  ./uninstall.sh --all                    Uninstall core + all packs"
+  echo "  ./uninstall.sh --core  Uninstall core config + shared Claude skills"
+  echo "  ./uninstall.sh --all   Uninstall core config + shared Claude skills"
   echo ""
 }
 
-if [ $# -eq 0 ]; then
-  usage
-  exit 0
-fi
+[ $# -gt 0 ] || { usage; exit 0; }
 
 DO_CORE=false
-DO_ALL=false
-PACKS=()
-
 while [ $# -gt 0 ]; do
   case "$1" in
-    --core)     DO_CORE=true ;;
-    --all)      DO_ALL=true ;;
-    --pack=*)   PACKS+=("${1#--pack=}") ;;
-    --target=*) PACK_TARGET_DIR="${1#--target=}" ;;
-    -h|--help)  usage; exit 0 ;;
-    *)          echo -e "${RED}Unknown option: $1${RESET}"; usage; exit 1 ;;
+    --core|--all) DO_CORE=true ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo -e "${RED}Unknown option: $1${RESET}"; usage; exit 1 ;;
   esac
   shift
 done
 
 echo ""
-
-if $DO_ALL; then
-  uninstall_core
-  for pack_dir in "$SCRIPT_DIR/packs"/*/; do
-    [ -d "$pack_dir" ] || continue
-    uninstall_pack "$(basename "$pack_dir")"
-  done
-elif $DO_CORE; then
-  uninstall_core
-fi
-
-for pack in "${PACKS[@]}"; do
-  uninstall_pack "$pack"
-done
+$DO_CORE && uninstall_core
 
 if [ $COUNT -eq 0 ]; then
   echo -e "${YELLOW}Nothing to uninstall.${RESET}"
