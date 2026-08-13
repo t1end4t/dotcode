@@ -1,4 +1,4 @@
-model = "coding-combo"
+model = "cx/gpt-5.6-sol"
 model_provider = "9router"
 model_reasoning_effort = "high"
 approval_policy = "never"
@@ -17,5 +17,5 @@ wire_api = "responses"
 network_access = true
 
 [agents.subagent]
-model = "coding-combo"
+model = "cx/gpt-5.6-sol"
 description = "General-purpose subagent for delegated Codex tasks"
