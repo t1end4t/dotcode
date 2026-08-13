@@ -2,7 +2,6 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILLS_SOURCE="$SCRIPT_DIR/../external/claude-skills/skills"
 
 BOLD="\033[1m"
 YELLOW="\033[0;33m"
@@ -41,15 +40,6 @@ uninstall_core() {
     done
   fi
 
-  if [ -d "$SKILLS_SOURCE" ]; then
-    for skill_dir in "$SKILLS_SOURCE"/*/; do
-      [ -f "$skill_dir/SKILL.md" ] || continue
-      local skill_name
-      skill_name=$(basename "$skill_dir")
-      remove_if_exists "$OPENCODE_HOME/skills/$skill_name" "~/.config/opencode/skills/$skill_name/"
-    done
-  fi
-
   echo ""
 }
 
@@ -57,8 +47,8 @@ usage() {
   echo -e "${BOLD}dotopencode uninstall${RESET}"
   echo ""
   echo "Usage:"
-  echo "  ./uninstall.sh --core  Uninstall core config + shared Claude skills"
-  echo "  ./uninstall.sh --all   Uninstall core config + shared Claude skills"
+  echo "  ./uninstall.sh --core  Uninstall core config"
+  echo "  ./uninstall.sh --all   Uninstall core config"
   echo ""
 }
 

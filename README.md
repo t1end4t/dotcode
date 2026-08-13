@@ -8,7 +8,7 @@ Shared config home for coding agents.
 claude/       # Claude Code config → ~/.claude/
 codex/        # Codex CLI config   → ~/.codex/
 opencode/     # OpenCode config    → ~/.config/opencode/
-external/     # Shared Claude skills submodule
+external/     # Claude Code skills submodule (Claude only)
 ```
 
 ## Install
@@ -21,7 +21,7 @@ git submodule update --init external/claude-skills
 ./install.sh --claude --core
 ./install.sh --opencode --core
 ./install.sh --all-agents --all
-./install.sh --codex --list
+./install.sh --claude --list
 ```
 
 Agent flags:
@@ -31,11 +31,12 @@ Agent flags:
 - `--opencode` installs to `~/.config/opencode`
 - `--all-agents` installs every supported agent
 
-Common installer options: `--core`, `--all`, `--list`. Claude also supports
+Common installer options: `--core`, `--all`. Claude also supports `--list` and
 `--mcp`.
 
-Core installs copy every skill from `external/claude-skills/skills/` into the
-selected agent's global skills directory.
+The Claude install copies every skill from `external/claude-skills/skills/` into
+`~/.claude/skills/`. Codex and OpenCode install no skills — the shared skills are
+Claude Code skills and are not supported by those agents.
 
 Installer behavior: selected repo-owned files are installed or updated without
 pruning unrelated files from the target config directories.

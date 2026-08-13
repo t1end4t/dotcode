@@ -21,7 +21,7 @@ usage() {
   echo "  ./install.sh --claude --core"
   echo "  ./install.sh --opencode --core"
   echo "  ./install.sh --all-agents --all"
-  echo "  ./install.sh --codex --list"
+  echo "  ./install.sh --claude --list"
   echo ""
   echo "Agents:"
   echo "  --codex       Target Codex CLI (~/.codex)"
@@ -30,8 +30,8 @@ usage() {
   echo "  --all-agents  Target every supported agent"
   echo ""
   echo "Options passed through to agent installers:"
-  echo "  --core --all --list -h --help"
-  echo "  --mcp  Claude only"
+  echo "  --core --all -h --help"
+  echo "  --list --mcp  Claude only"
   echo ""
 }
 

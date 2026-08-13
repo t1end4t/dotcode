@@ -2,7 +2,6 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILLS_SOURCE="$SCRIPT_DIR/../external/claude-skills/skills"
 
 BOLD="\033[1m"
 GREEN="\033[0;32m"
@@ -37,27 +36,6 @@ copy_file() {
   COUNT=$((COUNT + 1))
 }
 
-require_skills() {
-  [ -d "$SKILLS_SOURCE" ] && return 0
-  echo -e "  ${RED}external/claude-skills is not initialized${RESET}"
-  echo "  Run: git submodule update --init external/claude-skills"
-  return 1
-}
-
-install_skills() {
-  require_skills
-  mkdir -p "$OPENCODE_HOME/skills"
-  for skill_dir in "$SKILLS_SOURCE"/*/; do
-    [ -f "$skill_dir/SKILL.md" ] || continue
-    local skill_name
-    skill_name=$(basename "$skill_dir")
-    rm -rf "$OPENCODE_HOME/skills/$skill_name"
-    cp -r "$skill_dir" "$OPENCODE_HOME/skills/$skill_name"
-    echo -e "  ✅  ${GREEN}~/.config/opencode/skills/$skill_name/${RESET}"
-    COUNT=$((COUNT + 1))
-  done
-}
-
 install_core() {
   local core="$SCRIPT_DIR/core"
   [ -d "$core" ] || { echo -e "  ${RED}core/ not found${RESET}"; return 1; }
@@ -73,19 +51,7 @@ install_core() {
   copy_file "$core/oh-my-opencode-slim.json" "$OPENCODE_HOME/oh-my-opencode-slim.json" "~/.config/opencode/oh-my-opencode-slim.json"
   copy_file "$core/tui.json" "$OPENCODE_HOME/tui.json" "~/.config/opencode/tui.json"
   copy_dir "$core/plugins" "$OPENCODE_HOME/plugins" "~/.config/opencode/plugins/"
-  install_skills
 
-  echo ""
-}
-
-list_skills() {
-  require_skills
-  echo -e "${BOLD}Available skills:${RESET}"
-  echo ""
-  for skill_dir in "$SKILLS_SOURCE"/*/; do
-    [ -f "$skill_dir/SKILL.md" ] || continue
-    echo -e "  ${CYAN}$(basename "$skill_dir")${RESET}"
-  done
   echo ""
 }
 
@@ -93,9 +59,8 @@ usage() {
   echo -e "${BOLD}dotopencode${RESET} — OpenCode config installer"
   echo ""
   echo "Usage:"
-  echo "  ./install.sh --core  Install core config + shared Claude skills"
-  echo "  ./install.sh --all   Install core config + shared Claude skills"
-  echo "  ./install.sh --list  List shared Claude skills"
+  echo "  ./install.sh --core  Install core config"
+  echo "  ./install.sh --all   Install core config"
   echo ""
 }
 
@@ -105,7 +70,6 @@ DO_CORE=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --core|--all) DO_CORE=true ;;
-    --list) list_skills; exit 0 ;;
     -h|--help) usage; exit 0 ;;
     *) echo -e "${RED}Unknown option: $1${RESET}"; usage; exit 1 ;;
   esac

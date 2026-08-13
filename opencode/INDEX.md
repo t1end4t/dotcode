@@ -13,11 +13,9 @@ Onboarding map for this distribution (`opencode/` → `~/.config/opencode/`).
 ## Structure
 
 - `core/` — global instructions, OpenCode configuration, and TUI configuration
-- `../external/claude-skills/skills/` — shared skill source
 - `install.sh` / `uninstall.sh` — deploy/remove
 
 ## Core
 
 - **Agent**: `explorer`
 - **Plugin**: `oh-my-opencode-slim`
-- **Skills**: every directory under `../external/claude-skills/skills/`

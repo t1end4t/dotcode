@@ -23,10 +23,11 @@ Onboarding map for the shared coding-agent config repo.
 - `claude/` — Claude Code config distribution
 - `codex/` — Codex CLI config distribution
 - `opencode/` — OpenCode config distribution
-- `external/claude-skills/` — sole shared skill source
+- `external/claude-skills/` — Claude Code skill source (Claude only)
 
-## Shared skills
+## Skills
 
-All agents install skills directly from `external/claude-skills/skills/`.
+Only `claude/` installs skills, directly from `external/claude-skills/skills/`.
+Codex and OpenCode cannot load Claude Code skills, so they install none.
 
 - `external/claude-skills`

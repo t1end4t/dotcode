@@ -12,10 +12,8 @@ Onboarding map for this distribution (`codex/` → `~/.codex/`).
 
 - `core/` — global instructions, config (`config.toml`, `auth.json`), hooks
   (`hooks.json` + `core/hooks/`)
-- `../external/claude-skills/skills/` — shared skill source
 - `install.sh` / `uninstall.sh` — deploy/remove
 
 ## Core
 
 - **Hooks**: `user-prompt-submit-notification.sh`, `stop-notification.sh`
-- **Skills**: every directory under `../external/claude-skills/skills/`

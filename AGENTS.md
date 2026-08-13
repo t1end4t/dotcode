@@ -14,7 +14,7 @@ agent folder installs into that agent's home config directory.
 ./install.sh --codex --core           # Codex core only
 ./install.sh --opencode --core        # OpenCode core only
 ./install.sh --all-agents --all       # Everything
-./install.sh --claude --list          # List shared skills
+./install.sh --claude --list          # List shared skills (Claude only)
 ./uninstall.sh                        # Remove selected installs
 ```
 
@@ -27,8 +27,9 @@ agent folder installs into that agent's home config directory.
 
 ## Install behavior
 
-Core installs update selected repo-owned paths and copy skills from
-`external/claude-skills/skills/` without pruning unrelated target files.
+Core installs update selected repo-owned paths without pruning unrelated target
+files. Skills from `external/claude-skills/skills/` install for Claude only —
+they are Claude Code skills and do not work in Codex or OpenCode.
 
 ## Boundaries
 
