@@ -8,13 +8,13 @@
   },
   "presets": {
     "hybrid": {
-      "orchestrator": { "model": "9router/combo-codex(high)" },
-      "oracle": { "model": "9router/combo-opus(high)" },
-      "librarian": { "model": "9router/combo-opus(medium)" },
-      "explorer": { "model": "9router/combo-haiku(low)" },
-      "designer": { "model": "9router/combo-opus(medium)" },
-      "fixer": { "model": "9router/combo-codex(medium)" },
-      "observer": { "model": "9router/combo-haiku(low)" }
+      "orchestrator": { "model": "9router/combo-codex", "variant": "high" },
+      "oracle": { "model": "9router/combo-opus", "variant": "high" },
+      "librarian": { "model": "9router/combo-opus", "variant": "medium" },
+      "explorer": { "model": "9router/combo-haiku", "variant": "low" },
+      "designer": { "model": "9router/combo-opus", "variant": "medium" },
+      "fixer": { "model": "9router/combo-codex", "variant": "medium" },
+      "observer": { "model": "9router/combo-haiku", "variant": "low" }
     }
   },
   "disabled_agents": [],

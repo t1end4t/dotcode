@@ -8,11 +8,8 @@
         "apiKey": "sk_9router"
       },
       "models": {
-        "combo-opus(high)": {
+        "combo-opus": {
           "name": "combo-opus",
-          "options": {
-            "reasoningEffort": "high"
-          },
           "modalities": {
             "input": [
               "text",
@@ -21,43 +18,15 @@
             "output": [
               "text"
             ]
-          }
-        },
-        "combo-opus(medium)": {
-          "name": "combo-opus",
-          "options": {
-            "reasoningEffort": "medium"
           },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
+          "variants": {
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" },
+            "max": { "reasoningEffort": "max" }
           }
         },
-        "combo-opus(max)": {
-          "name": "combo-opus",
-          "options": {
-            "reasoningEffort": "max"
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "combo-sonnet(medium)": {
+        "combo-sonnet": {
           "name": "combo-sonnet",
-          "options": {
-            "reasoningEffort": "medium"
-          },
           "modalities": {
             "input": [
               "text",
@@ -66,28 +35,14 @@
             "output": [
               "text"
             ]
-          }
-        },
-        "combo-sonnet(high)": {
-          "name": "combo-sonnet",
-          "options": {
-            "reasoningEffort": "high"
           },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
+          "variants": {
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
           }
         },
-        "combo-codex(high)": {
+        "combo-codex": {
           "name": "combo-codex",
-          "options": {
-            "reasoningEffort": "high"
-          },
           "modalities": {
             "input": [
               "text",
@@ -96,43 +51,15 @@
             "output": [
               "text"
             ]
-          }
-        },
-        "combo-codex(xhigh)": {
-          "name": "combo-codex",
-          "options": {
-            "reasoningEffort": "xhigh"
           },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
+          "variants": {
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" },
+            "xhigh": { "reasoningEffort": "xhigh" }
           }
         },
-        "combo-codex(medium)": {
-          "name": "combo-codex",
-          "options": {
-            "reasoningEffort": "medium"
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "combo-haiku(low)": {
+        "combo-haiku": {
           "name": "combo-haiku",
-          "options": {
-            "reasoningEffort": "low"
-          },
           "modalities": {
             "input": [
               "text",
@@ -141,21 +68,10 @@
             "output": [
               "text"
             ]
-          }
-        },
-        "combo-haiku(medium)": {
-          "name": "combo-haiku",
-          "options": {
-            "reasoningEffort": "medium"
           },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
+          "variants": {
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" }
           }
         }
       }
@@ -163,12 +79,14 @@
   },
   "lsp": true,
   "formatter": true,
-  "model": "9router/combo-codex(high)",
+  "model": "9router/combo-codex",
+  "variant": "high",
   "agent": {
     "explorer": {
       "description": "Fast explorer subagent for codebase exploration",
       "mode": "subagent",
-      "model": "9router/combo-haiku(low)"
+      "model": "9router/combo-haiku",
+      "variant": "low"
     }
   }
 }

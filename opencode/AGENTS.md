@@ -14,6 +14,10 @@ Run from this folder (the installer targets `~/.config/opencode/`).
 
 After install, quit and restart opencode so config/plugins reload.
 
+9router combo names must remain bare model ids (`combo-codex`), with OpenCode
+reasoning levels configured through `variant`. Parenthesized ids such as
+`combo-codex(high)` are sent literally and 9router misroutes them to `openai`.
+
 ## Conventions
 
 - `core/opencode.json` → `~/.config/opencode/opencode.json`
