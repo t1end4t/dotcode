@@ -8,8 +8,8 @@
         "apiKey": "sk_9router"
       },
       "models": {
-        "cc/claude-opus-5(high)": {
-          "name": "cc/claude-opus-5",
+        "combo-opus(high)": {
+          "name": "combo-opus",
           "options": {
             "reasoningEffort": "high"
           },
@@ -23,38 +23,8 @@
             ]
           }
         },
-        "cc/claude-opus-5(xhigh)": {
-          "name": "cc/claude-opus-5",
-          "options": {
-            "reasoningEffort": "xhigh"
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cc/claude-opus-5(max)": {
-          "name": "cc/claude-opus-5",
-          "options": {
-            "reasoningEffort": "max"
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cc/claude-sonnet-5(medium)": {
-          "name": "cc/claude-sonnet-5",
+        "combo-opus(medium)": {
+          "name": "combo-opus",
           "options": {
             "reasoningEffort": "medium"
           },
@@ -68,68 +38,8 @@
             ]
           }
         },
-        "cx/gpt-5.6-terra(high)": {
-          "name": "cx/gpt-5.6-terra",
-          "options": {
-            "reasoningEffort": "high"
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cx/gpt-5.6-terra(medium)": {
-          "name": "cx/gpt-5.6-terra",
-          "options": {
-            "reasoningEffort": "medium"
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cx/gpt-5.6-sol(high)": {
-          "name": "cx/gpt-5.6-sol",
-          "options": {
-            "reasoningEffort": "high"
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cx/gpt-5.6-sol(xhigh)": {
-          "name": "cx/gpt-5.6-sol",
-          "options": {
-            "reasoningEffort": "xhigh"
-          },
-          "modalities": {
-            "input": [
-              "text",
-              "image"
-            ],
-            "output": [
-              "text"
-            ]
-          }
-        },
-        "cx/gpt-5.6-sol(max)": {
-          "name": "cx/gpt-5.6-sol",
+        "combo-opus(max)": {
+          "name": "combo-opus",
           "options": {
             "reasoningEffort": "max"
           },
@@ -143,8 +53,83 @@
             ]
           }
         },
-        "cx/gpt-5.6-luna(low)": {
-          "name": "cx/gpt-5.6-luna",
+        "combo-sonnet(medium)": {
+          "name": "combo-sonnet",
+          "options": {
+            "reasoningEffort": "medium"
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        },
+        "combo-sonnet(high)": {
+          "name": "combo-sonnet",
+          "options": {
+            "reasoningEffort": "high"
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        },
+        "combo-codex(high)": {
+          "name": "combo-codex",
+          "options": {
+            "reasoningEffort": "high"
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        },
+        "combo-codex(xhigh)": {
+          "name": "combo-codex",
+          "options": {
+            "reasoningEffort": "xhigh"
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        },
+        "combo-codex(medium)": {
+          "name": "combo-codex",
+          "options": {
+            "reasoningEffort": "medium"
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          }
+        },
+        "combo-haiku(low)": {
+          "name": "combo-haiku",
           "options": {
             "reasoningEffort": "low"
           },
@@ -158,8 +143,8 @@
             ]
           }
         },
-        "cx/gpt-5.6-luna(medium)": {
-          "name": "cx/gpt-5.6-luna",
+        "combo-haiku(medium)": {
+          "name": "combo-haiku",
           "options": {
             "reasoningEffort": "medium"
           },
@@ -178,12 +163,12 @@
   },
   "lsp": true,
   "formatter": true,
-  "model": "9router/cx/gpt-5.6-sol(xhigh)",
+  "model": "9router/combo-codex(high)",
   "agent": {
     "explorer": {
       "description": "Fast explorer subagent for codebase exploration",
       "mode": "subagent",
-      "model": "9router/cx/gpt-5.6-sol(high)"
+      "model": "9router/combo-haiku(low)"
     }
   }
 }
