@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
   X,
-  Save,
   ExternalLink,
   Terminal,
   FileText,
@@ -12,7 +11,6 @@ import {
   RefreshCw,
   CheckCircle2,
   Download,
-  Trash2,
 } from "lucide-react";
 import { ManageableItem } from "../data/items";
 
@@ -20,65 +18,32 @@ interface CustomConfigModalProps {
   item: ManageableItem | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (updatedItem: ManageableItem) => void;
   onAskAi: (prompt: string) => void;
   onUpdateItem?: (id: string) => void;
-  onRemoveItem?: (id: string) => void;
 }
 
 export const CustomConfigModal: React.FC<CustomConfigModalProps> = ({
   item,
   isOpen,
   onClose,
-  onSave,
   onAskAi,
   onUpdateItem,
-  onRemoveItem,
 }) => {
   if (!isOpen || !item) return null;
 
-  const [customCommand, setCustomCommand] = useState(item.customCommand || item.defaultInstallCommand);
-  const [customNotes, setCustomNotes] = useState(item.customNotes || "");
-  const [enabled, setEnabled] = useState(item.enabled);
   const [installed, setInstalled] = useState(item.installed);
-  const [tagsStr, setTagsStr] = useState(item.tags.join(", "));
-  const [isCheckingRelease, setIsCheckingRelease] = useState(false);
+  const [isCheckingRelease] = useState(false);
   const [checkSuccessMsg, setCheckSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (item) {
-      setCustomCommand(item.customCommand || item.defaultInstallCommand);
-      setCustomNotes(item.customNotes || "");
-      setEnabled(item.enabled);
       setInstalled(item.installed);
-      setTagsStr(item.tags.join(", "));
       setCheckSuccessMsg(null);
     }
   }, [item]);
 
   const handleManualCheck = () => {
-    setIsCheckingRelease(true);
-    setTimeout(() => {
-      setIsCheckingRelease(false);
-      setCheckSuccessMsg(
-        item.hasUpdate
-          ? `Newer release ${item.latestVersion} found on GitHub!`
-          : `Up to date: ${item.currentVersion || "v1.0.0"} is the latest release.`
-      );
-    }, 700);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const updated: ManageableItem = {
-      ...item,
-      customCommand,
-      customNotes,
-      enabled,
-      installed,
-      tags: tagsStr.split(",").map((t) => t.trim()).filter(Boolean),
-    };
-    onSave(updated);
+    onAskAi(`Check ${item.githubUrl} against its recorded installation and upstream releases. Do not change anything.`);
     onClose();
   };
 
@@ -103,17 +68,17 @@ export const CustomConfigModal: React.FC<CustomConfigModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-          {/* Quick status toggles */}
-          <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-950/50 border border-slate-800/80">
+        <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+          <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800/80">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-xs font-medium text-slate-200">Installation State</span>
-                <p className="text-[11px] text-slate-400">Mark as installed in local env</p>
+                <p className="text-[11px] text-slate-400">Last verified by Codex</p>
               </div>
               <button
                 type="button"
-                onClick={() => setInstalled(!installed)}
+                disabled
+                aria-label="Verified installation state"
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                   installed ? "bg-emerald-600" : "bg-slate-700"
                 }`}
@@ -121,26 +86,6 @@ export const CustomConfigModal: React.FC<CustomConfigModalProps> = ({
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                     installed ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between border-l border-slate-800/80 pl-3">
-              <div>
-                <span className="text-xs font-medium text-slate-200">Active / Enabled</span>
-                <p className="text-[11px] text-slate-400">Include in runtime config</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEnabled(!enabled)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  enabled ? "bg-indigo-600" : "bg-slate-700"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    enabled ? "translate-x-6" : "translate-x-1"
                   }`}
                 />
               </button>
@@ -156,9 +101,9 @@ export const CustomConfigModal: React.FC<CustomConfigModalProps> = ({
                   Version & Update Status
                 </span>
                 <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                  Current: <strong className="text-slate-200">{item.currentVersion || "v1.0.0"}</strong> · Upstream:{" "}
+                  Current: <strong className="text-slate-200">{item.currentVersion || "Unknown"}</strong> · Upstream:{" "}
                   <strong className={item.hasUpdate ? "text-amber-400" : "text-emerald-400"}>
-                    {item.latestVersion || "v1.0.0"}
+                    {item.latestVersion || "Not checked"}
                   </strong>
                 </p>
               </div>
@@ -203,58 +148,34 @@ export const CustomConfigModal: React.FC<CustomConfigModalProps> = ({
             )}
           </div>
 
-          {/* Custom Launch / Execution Command */}
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Terminal className="h-3.5 w-3.5 text-indigo-400" />
-                Custom Run / Install Command
-              </span>
-              <span className="text-[11px] text-slate-500 font-mono">Bash command</span>
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={customCommand}
-                onChange={(e) => setCustomCommand(e.target.value)}
-                placeholder="e.g., cargo install disktree, or python run.py"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs font-mono text-slate-100 placeholder-slate-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Default: <code className="text-slate-400">{item.defaultInstallCommand}</code>
-            </p>
-          </div>
+          <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400" aria-label="Card metadata">
+            <h4 className="mb-2 flex items-center gap-1.5 font-medium text-slate-300"><Terminal className="h-3.5 w-3.5 text-indigo-400" />Command</h4>
+            <code className="block whitespace-pre-wrap break-all text-slate-300">{item.customCommand || item.defaultInstallCommand || "Not recorded"}</code>
+            <p className="mt-2">Recorded install: <code className="text-slate-400">{item.receipt?.installCommand || "Ask Codex to inspect the repository first."}</code></p>
+          </section>
 
-          {/* Custom Notes & Cheatsheet */}
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5 text-indigo-400" />
-              Personal Notes, Keybindings & Cheatsheet
-            </label>
-            <textarea
-              rows={3}
-              value={customNotes}
-              onChange={(e) => setCustomNotes(e.target.value)}
-              placeholder="Add personal flags, tips, API tokens or reasons you use this tool..."
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs text-slate-100 placeholder-slate-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
+          {item.receipt && (
+            <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400" aria-label="Installation receipt">
+              <p className="break-all">Location: {item.receipt.location || "Unknown"}</p>
+              <p>Method: {item.receipt.method || "Unknown"}</p>
+              <p className="whitespace-pre-wrap break-words">Configuration changes: {item.receipt.configurationNotes || "None recorded"}</p>
+              <p>Verified: {new Date(item.receipt.verifiedAt).toLocaleString()}</p>
+              {(["updateCommand", "uninstallCommand", "verificationCommand"] as const).map(field => (
+                <div key={field} className="mt-2">
+                  <span>{field.replace("Command", "")}: </span>
+                  <code className="whitespace-pre-wrap break-all text-slate-300">{item.receipt?.[field] || "Unsupported / not established"}</code>
+                </div>
+              ))}
+              <button type="button" className="mt-3 text-indigo-300 underline" onClick={() => { onAskAi(`Inspect lifecycle support for ${item.githubUrl}. Explain install, update, and uninstall where supported.`); onClose(); }}>Inspect lifecycle with Codex</button>
+            </section>
+          )}
 
-          {/* Tags */}
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
-              <Tag className="h-3.5 w-3.5 text-indigo-400" />
-              Tags (comma separated)
-            </label>
-            <input
-              type="text"
-              value={tagsStr}
-              onChange={(e) => setTagsStr(e.target.value)}
-              placeholder="CLI, Rust, Performance, Productivity"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs text-slate-100 placeholder-slate-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
+          <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-xs" aria-label="Saved card notes and tags">
+            <div><h4 className="mb-1 flex items-center gap-1.5 font-medium text-slate-300"><FileText className="h-3.5 w-3.5 text-indigo-400" />Notes</h4>
+              <p className="whitespace-pre-wrap break-words text-slate-400">{item.customNotes || "None"}</p></div>
+            <div><h4 className="mb-1 flex items-center gap-1.5 font-medium text-slate-300"><Tag className="h-3.5 w-3.5 text-indigo-400" />Tags</h4>
+              <p className="text-slate-400">{item.tags.join(", ") || "None"}</p></div>
+          </section>
 
           {/* External Link & Quick AI Help */}
           <div className="flex items-center justify-between pt-2 border-t border-slate-800">
@@ -281,42 +202,12 @@ export const CustomConfigModal: React.FC<CustomConfigModalProps> = ({
             </button>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-            {onRemoveItem && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm(`Remove "${item.name}" from your DotCode stack?`)) {
-                    onRemoveItem(item.id);
-                    onClose();
-                  }
-                }}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors border border-rose-500/20"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>Remove Card</span>
-              </button>
-            )}
-
-            <div className="flex items-center gap-2 ml-auto">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-xs font-medium text-slate-300 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-500 transition-colors shadow-sm"
-              >
-                <Save className="h-3.5 w-3.5" />
-                <span>Save Configuration</span>
-              </button>
-            </div>
+            <button type="button" onClick={() => { onAskAi(`Update or remove the ${item.name} card (${item.githubUrl}): `); onClose(); }}
+              className="rounded-lg px-3 py-2 text-xs font-medium text-indigo-300 hover:bg-indigo-500/10 focus-visible:ring-2 focus-visible:ring-indigo-400">Manage in chat</button>
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-slate-100">Close</button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

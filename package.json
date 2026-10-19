@@ -3,16 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "build": "npm run build -w backend && npm run build -w frontend",
-    "start": "NODE_ENV=production tsx server.ts"
+    "dev": "tsx watch server.ts",
+    "build": "npm run build -w frontend",
+    "start": "NODE_ENV=production tsx server.ts",
+    "test": "node --import tsx --test tests/*.test.*",
+    "test:watch": "node --import tsx --test --watch tests/*.test.*"
   },
   "workspaces": [
-    "backend",
     "frontend"
   ],
   "dependencies": {
-    "@google/genai": "^2.30.0",
+    "@openai/codex-sdk": "^0.163.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^4.3.4",
     "express": "^4.21.2",

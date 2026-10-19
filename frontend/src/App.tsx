@@ -3,10 +3,8 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
-  Plus,
   Download,
   Trash2,
-  Power,
   Edit3,
   ExternalLink,
   Terminal,
@@ -26,79 +24,64 @@ import {
   GitCommit,
   Check,
 } from "lucide-react";
-import { INITIAL_ITEMS, ManageableItem, ItemCategory, UPDATE_REGISTRY } from "./data/items";
+import type { ManageableItem } from "./data/items";
+import { useCatalog } from "./useCatalog";
 import { AiPane } from "./components/AiPane";
 import { CustomConfigModal } from "./components/CustomConfigModal";
-import { AddItemModal } from "./components/AddItemModal";
-import { ExportModal } from "./components/ExportModal";
 import { UpdateModal } from "./components/UpdateModal";
 
 export default function App() {
-  const [items, setItems] = useState<ManageableItem[]>(() => {
-    const saved = localStorage.getItem("dotcode_items");
-    if (saved) {
-      try {
-        const parsed: ManageableItem[] = JSON.parse(saved);
-        // Ensure version fields exist from registry if imported from earlier session
-        return parsed.map((item) => {
-          const reg = UPDATE_REGISTRY[item.id];
-          return {
-            ...item,
-            currentVersion: item.currentVersion || reg?.current || "v1.0.0",
-            latestVersion: item.latestVersion || reg?.latest || "v1.0.0",
-            hasUpdate: item.hasUpdate !== undefined ? item.hasUpdate : (reg?.hasUpdate || false),
-            releaseNotes: item.releaseNotes || reg?.notes || "Up to date with upstream",
-            lastChecked: item.lastChecked || "Today, 4:05 AM",
-          };
-        });
-      } catch (e) {
-        console.error("Failed to parse saved items:", e);
-      }
-    }
-    return INITIAL_ITEMS;
-  });
+  const { items, inventoryError, catalogLoaded, refreshCatalog, checkUpdates } = useCatalog();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<ItemCategory | "all">("all");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<
-    "all" | "installed" | "enabled" | "disabled" | "updates" | "available"
+    "all" | "installed" | "updates" | "available"
   >("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [isAiPaneOpen, setIsAiPaneOpen] = useState(true);
   const [prefilledAiPrompt, setPrefilledAiPrompt] = useState<string | undefined>();
+  const [submittedAiPrompt, setSubmittedAiPrompt] = useState<string | undefined>();
   const [editingItem, setEditingItem] = useState<ManageableItem | null>(null);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
-  const [lastCheckedTime, setLastCheckedTime] = useState("Today, 4:05 AM");
-  const [backendHealth, setBackendHealth] = useState<{ ok: boolean; hasAiKey: boolean } | null>(null);
+  const [checkingUpdateIds, setCheckingUpdateIds] = useState<string[]>([]);
+  const isCheckingUpdates = checkingUpdateIds.length > 0;
+  const [lastCheckedTime, setLastCheckedTime] = useState("Not checked");
+  const requestAction = (message: string) => {
+    setIsAiPaneOpen(true);
+    setPrefilledAiPrompt(message);
+  };
 
-  // Sync items to localStorage
-  useEffect(() => {
-    localStorage.setItem("dotcode_items", JSON.stringify(items));
-  }, [items]);
+  const categorize = (message: string) => {
+    setIsAiPaneOpen(true);
+    setSubmittedAiPrompt(message);
+  };
 
-  // Check backend health
+  const startItemDrag = (event: React.DragEvent, item: ManageableItem) => {
+    event.dataTransfer.setData("text/uri-list", item.githubUrl);
+    event.dataTransfer.setData("text/plain", item.githubUrl);
+    event.dataTransfer.effectAllowed = "copy";
+    setIsAiPaneOpen(true);
+  };
+
+  const categories = useMemo(() => Array.from(new Set(items.map(item => item.category)))
+    .sort((first, second) => first.localeCompare(second))
+    .map(category => ({ id: category, label: category, count: items.filter(item => item.category === category).length })), [items]);
+
   useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then((data) => setBackendHealth({ ok: data.ok, hasAiKey: data.hasAiKey }))
-      .catch(() => setBackendHealth({ ok: false, hasAiKey: false }));
-  }, []);
+    if (selectedCategory !== null && !items.some(item => item.category === selectedCategory)) setSelectedCategory(null);
+  }, [items, selectedCategory]);
 
   // Filter & Search Logic
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       // Category filter
-      if (selectedCategory !== "all" && item.category !== selectedCategory) {
+      if (selectedCategory !== null && item.category !== selectedCategory) {
         return false;
       }
 
       // Status filter
       if (selectedStatus === "installed" && !item.installed) return false;
-      if (selectedStatus === "enabled" && !item.enabled) return false;
-      if (selectedStatus === "disabled" && item.enabled) return false;
       if (selectedStatus === "available" && item.installed) return false;
       if (selectedStatus === "updates" && !item.hasUpdate) return false;
 
@@ -122,129 +105,44 @@ export default function App() {
   // Status metrics
   const totalCount = items.length;
   const installedCount = items.filter((i) => i.installed).length;
-  const enabledCount = items.filter((i) => i.enabled).length;
   const updatesCount = items.filter((i) => i.hasUpdate).length;
 
   // Global Check for Updates action
-  const handleCheckUpdates = () => {
-    setIsCheckingUpdates(true);
-    setTimeout(() => {
-      setIsCheckingUpdates(false);
-      const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      setLastCheckedTime(`Today, ${nowStr}`);
-      setItems((prev) =>
-        prev.map((item) => ({
-          ...item,
-          lastChecked: `Today, ${nowStr}`,
-        }))
-      );
-      setIsUpdateModalOpen(true);
-    }, 850);
+  const handleCheckUpdates = async (id?: string, event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    if (isCheckingUpdates) return;
+    const targets = id ? items.filter(item => item.id === id) : items;
+    setCheckingUpdateIds(targets.map(item => item.id));
+    try {
+      for (const item of targets) await checkUpdates(item);
+      setLastCheckedTime(new Date().toLocaleString());
+    } finally {
+      setCheckingUpdateIds([]);
+    }
   };
 
   // Update a single item
   const handleUpdateItem = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          return {
-            ...item,
-            currentVersion: item.latestVersion || item.currentVersion,
-            hasUpdate: false,
-            installed: true,
-          };
-        }
-        return item;
-      })
-    );
+    const item = items.find(item => item.id === id);
+    if (item) requestAction(`Update ${item.githubUrl}. Inspect its recorded installation first.`);
   };
 
   // Update all items that have updates available
   const handleUpdateAll = () => {
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.hasUpdate) {
-          return {
-            ...item,
-            currentVersion: item.latestVersion || item.currentVersion,
-            hasUpdate: false,
-            installed: true,
-          };
-        }
-        return item;
-      })
-    );
+    requestAction("Plan updates for installed tools. Inspect each installation and report changes before execution.");
   };
 
   // Toggle Install
   const handleToggleInstall = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          const nextInstalled = !item.installed;
-          return {
-            ...item,
-            installed: nextInstalled,
-            enabled: nextInstalled ? true : false,
-          };
-        }
-        return item;
-      })
-    );
+    const item = items.find(item => item.id === id);
+    if (item) requestAction(`${item.installed ? "Uninstall" : "Install"} ${item.githubUrl}.`);
   };
 
-  // Toggle Enable
-  const handleToggleEnable = (id: string, e?: React.MouseEvent) => {
+  const handleRemoveItem = (item: ManageableItem, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id === id) {
-          return {
-            ...item,
-            enabled: !item.enabled,
-          };
-        }
-        return item;
-      })
-    );
-  };
-
-  // Update item from config modal
-  const handleSaveItem = (updated: ManageableItem) => {
-    setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-  };
-
-  // Add new item
-  const handleAddItem = (newItem: ManageableItem) => {
-    setItems((prev) => [newItem, ...prev]);
-  };
-
-  // Remove card / item from collection
-  const handleRemoveItem = (id: string, name: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    if (confirm(`Remove "${name}" card from your DotCode collection?`)) {
-      setItems((prev) => prev.filter((item) => item.id !== id));
-      if (editingItem?.id === id) {
-        setEditingItem(null);
-      }
-    }
-  };
-
-  // Batch actions
-  const handleEnableAll = () => {
-    setItems((prev) => prev.map((i) => ({ ...i, enabled: true })));
-  };
-
-  const handleDisableAll = () => {
-    setItems((prev) => prev.map((i) => ({ ...i, enabled: false })));
-  };
-
-  const handleResetDefaults = () => {
-    if (confirm("Reset all 39 DotCode tools and resources to template defaults?")) {
-      setItems(INITIAL_ITEMS);
-    }
+    requestAction(`Remove the ${item.name} card (${item.githubUrl}) from my catalog. Do not uninstall it.`);
   };
 
   const handleAskAiAboutItem = (item: ManageableItem, e?: React.MouseEvent) => {
@@ -253,13 +151,6 @@ export default function App() {
     setPrefilledAiPrompt(
       `Tell me how to use and customize ${item.name} (${item.repo}) for my daily workflow. What are the best command flags or configuration patterns?`
     );
-  };
-
-  const categoryIcons: Record<ItemCategory, React.ElementType> = {
-    tool: Wrench,
-    app: Monitor,
-    course: BookOpen,
-    resource: Cpu,
   };
 
   return (
@@ -305,43 +196,6 @@ export default function App() {
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-2">
-            {/* Check for Updates Button */}
-            <button
-              onClick={handleCheckUpdates}
-              disabled={isCheckingUpdates}
-              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                updatesCount > 0
-                  ? "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
-                  : "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white"
-              }`}
-              title="Check all 39 repositories for newer releases"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${isCheckingUpdates ? "animate-spin text-indigo-400" : ""}`} />
-              <span className="hidden sm:inline">{isCheckingUpdates ? "Checking..." : "Check Updates"}</span>
-              {updatesCount > 0 && (
-                <span className="ml-1 rounded-full bg-amber-500 px-1.5 py-0.2 text-[10px] font-bold text-slate-950 font-mono">
-                  {updatesCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors"
-            >
-              <Plus className="h-3.5 w-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">Add Item</span>
-            </button>
-
-            <button
-              onClick={() => setIsExportModalOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors"
-              title="Export bash setup script or markdown"
-            >
-              <Download className="h-3.5 w-3.5 text-slate-400" />
-              <span className="hidden md:inline">Export Script</span>
-            </button>
-
             {/* AI Pane Toggle Button */}
             <button
               onClick={() => setIsAiPaneOpen(!isAiPaneOpen)}
@@ -354,27 +208,26 @@ export default function App() {
               <Sparkles className="h-3.5 w-3.5" />
               <span>{isAiPaneOpen ? "Close Copilot" : "AI Copilot"}</span>
               <span className="hidden md:inline text-[10px] bg-black/20 px-1 rounded font-mono">
-                Gemini
+                Codex
               </span>
             </button>
           </div>
         </header>
 
+        {inventoryError && <p role="alert" className="px-6 py-2 text-sm text-rose-300">{inventoryError}</p>}
         {/* Filter and Metrics Toolbar */}
         <div className="border-b border-slate-800/80 bg-slate-950/40 px-6 py-3">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             {/* Category tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
               {[
-                { id: "all", label: "All Items", count: items.length },
-                { id: "tool", label: "CLI & Tools", count: items.filter((i) => i.category === "tool").length },
-                { id: "app", label: "Desktop Apps", count: items.filter((i) => i.category === "app").length },
-                { id: "course", label: "Courses & Books", count: items.filter((i) => i.category === "course").length },
-                { id: "resource", label: "Engines & RAG", count: items.filter((i) => i.category === "resource").length },
+                { id: null, label: "All Items", count: items.length },
+                ...categories,
               ].map((tab) => (
                 <button
-                  key={tab.id}
-                  onClick={() => setSelectedCategory(tab.id as any)}
+                  key={tab.id ?? "all-items"}
+                  onClick={() => setSelectedCategory(tab.id)}
+                  aria-pressed={selectedCategory === tab.id}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors ${
                     selectedCategory === tab.id
                       ? "bg-slate-800 text-white border border-slate-700 shadow-sm"
@@ -385,6 +238,9 @@ export default function App() {
                   <span className="text-[10px] text-slate-500 font-mono">({tab.count})</span>
                 </button>
               ))}
+              <button type="button" onClick={() => categorize("Organize my entire catalog into meaningful categories. Reuse suitable groups. Do not install anything.")} className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs text-indigo-300 hover:bg-slate-800">
+                <Sparkles className="h-3.5 w-3.5" /> Organize with AI
+              </button>
             </div>
 
             {/* Lifecycle Status & View Switcher */}
@@ -393,7 +249,6 @@ export default function App() {
                 {[
                   { id: "all", label: "All" },
                   { id: "installed", label: `Installed (${installedCount})` },
-                  { id: "enabled", label: `Enabled (${enabledCount})` },
                   { id: "updates", label: `Updates (${updatesCount})` },
                   { id: "available", label: "Available" },
                 ].map((s) => (
@@ -446,11 +301,6 @@ export default function App() {
                 <CheckCircle2 className="h-3 w-3" />
                 {installedCount} installed
               </span>
-              <span aria-hidden="true" className="text-slate-600">·</span>
-              <span className="text-indigo-400 flex items-center gap-1">
-                <Power className="h-3 w-3" />
-                {enabledCount} active
-              </span>
               {updatesCount > 0 && (
                 <>
                   <span aria-hidden="true" className="text-slate-600">·</span>
@@ -475,30 +325,8 @@ export default function App() {
                     <Download className="h-3 w-3" />
                     Update All ({updatesCount})
                   </button>
-                  <span aria-hidden="true" className="text-slate-700">|</span>
                 </>
               )}
-              <button
-                onClick={handleEnableAll}
-                className="text-[11px] text-slate-400 hover:text-indigo-300 hover:underline"
-              >
-                Enable All
-              </button>
-              <span aria-hidden="true" className="text-slate-700">|</span>
-              <button
-                onClick={handleDisableAll}
-                className="text-[11px] text-slate-400 hover:text-slate-200 hover:underline"
-              >
-                Disable All
-              </button>
-              <span aria-hidden="true" className="text-slate-700">|</span>
-              <button
-                onClick={handleResetDefaults}
-                className="text-[11px] text-slate-500 hover:text-rose-400 hover:underline flex items-center gap-1"
-              >
-                <RefreshCw className="h-2.5 w-2.5" />
-                Reset Defaults
-              </button>
             </div>
           </div>
         </div>
@@ -508,32 +336,35 @@ export default function App() {
           {filteredItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center rounded-2xl border border-dashed border-slate-800 p-8">
               <Search className="h-8 w-8 text-slate-600 mb-3" />
-              <h3 className="text-sm font-semibold text-slate-200">No items match your filter</h3>
+              <h3 className="text-sm font-semibold text-slate-200">{!catalogLoaded ? inventoryError ? "Catalog could not load" : "Loading catalog..." : "No items match your filter"}</h3>
               <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                Try clearing your search query or switching categories to see all 39 imported tools and resources.
+                {!catalogLoaded ? inventoryError ? "Your saved catalog has not been replaced. Retry after checking the server." : "Reading your saved catalog." : "Try clearing your search query or switching categories."}
               </p>
-              <button
+              {(catalogLoaded || inventoryError) && <button
                 onClick={() => {
+                  if (!catalogLoaded) return window.location.reload();
                   setSearchQuery("");
-                  setSelectedCategory("all");
+                  setSelectedCategory(null);
                   setSelectedStatus("all");
                 }}
                 className="mt-4 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 transition-colors"
               >
-                Reset All Filters
-              </button>
+                {catalogLoaded ? "Reset All Filters" : "Retry"}
+              </button>}
             </div>
           ) : viewMode === "grid" ? (
             /* Card Grid View */
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {filteredItems.map((item) => {
-                const IconComponent = categoryIcons[item.category] || Wrench;
                 return (
                   <div
                     key={item.id}
+                    draggable
+                    onDragStart={event => startItemDrag(event, item)}
+                    title="Drag into chat, or use Ask AI"
                     onClick={() => setEditingItem(item)}
                     className={`group relative flex flex-col justify-between rounded-xl border p-4 transition-all cursor-pointer ${
-                      item.enabled
+                      item.installed
                         ? "border-slate-700/80 bg-slate-900/90 hover:border-indigo-500/60 hover:shadow-lg hover:shadow-indigo-500/5"
                         : "border-slate-800/80 bg-slate-900/40 opacity-75 hover:opacity-100 hover:border-slate-700"
                     }`}
@@ -542,16 +373,8 @@ export default function App() {
                       {/* Card Header */}
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">
-                          <div className={`p-2 rounded-lg ${
-                            item.category === "tool"
-                              ? "bg-amber-500/10 text-amber-400"
-                              : item.category === "app"
-                              ? "bg-cyan-500/10 text-cyan-400"
-                              : item.category === "course"
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : "bg-indigo-500/10 text-indigo-400"
-                          }`}>
-                            <IconComponent className="h-4 w-4" />
+                          <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
+                            <Layers className="h-4 w-4" />
                           </div>
                           <div>
                             <div className="flex items-center gap-1.5">
@@ -584,26 +407,6 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Enable/Disable Switch */}
-                        <div
-                          className="flex items-center gap-1.5"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={(e) => handleToggleEnable(item.id, e)}
-                            title={item.enabled ? "Enabled in stack (Click to disable)" : "Disabled (Click to enable)"}
-                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
-                              item.enabled ? "bg-indigo-600" : "bg-slate-700"
-                            }`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-[3px] ${
-                                item.enabled ? "translate-x-4.5" : "translate-x-0.5"
-                              }`}
-                            />
-                          </button>
-                        </div>
                       </div>
 
                       {/* Unboxed Metadata (Zero-pill discipline per frontend-design) */}
@@ -612,10 +415,8 @@ export default function App() {
                         <span aria-hidden="true">·</span>
                         <span>{item.primaryLanguage}</span>
                         <span aria-hidden="true">·</span>
-                        <span>★ {item.stars}</span>
-                        <span aria-hidden="true">·</span>
                         <span className="font-mono text-slate-400">
-                          {item.currentVersion || "v1.0.0"}
+                          {item.currentVersion || "Not verified"}
                         </span>
                       </div>
 
@@ -623,6 +424,16 @@ export default function App() {
                       <p className="text-xs text-slate-300 leading-relaxed line-clamp-2 mb-3">
                         {item.description}
                       </p>
+
+                      <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
+                        <button type="button" onClick={event => void handleCheckUpdates(item.id, event)} disabled={isCheckingUpdates}
+                          aria-label={`Check updates for ${item.name}`}
+                          className="flex items-center gap-1 rounded px-1.5 py-1 text-slate-300 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50">
+                          <RefreshCw className={`h-3 w-3 ${checkingUpdateIds.includes(item.id) ? "animate-spin" : ""}`} />
+                          {checkingUpdateIds.includes(item.id) ? "Checking..." : "Check updates"}
+                        </button>
+                        <span role="status" className={item.hasUpdate ? "text-amber-400" : "text-slate-400"}>{item.updateStatus}</span>
+                      </div>
 
                       {/* Custom Command or Notes Preview */}
                       {(item.customCommand || item.defaultInstallCommand) && (
@@ -677,7 +488,7 @@ export default function App() {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => setEditingItem(item)}
-                          title="Configure command, notes, or tags"
+                          title="View card details"
                           className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-md transition-colors"
                         >
                           <Edit3 className="h-3.5 w-3.5" />
@@ -693,8 +504,8 @@ export default function App() {
                         </button>
 
                         <button
-                          onClick={(e) => handleRemoveItem(item.id, item.name, e)}
-                          title="Remove card from collection"
+                          onClick={(e) => handleRemoveItem(item, e)}
+                          title="Ask chat to remove card"
                           className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -716,7 +527,6 @@ export default function App() {
                     <th className="px-4 py-3">Version</th>
                     <th className="px-4 py-3">Command</th>
                     <th className="px-4 py-3 text-center">Installed</th>
-                    <th className="px-4 py-3 text-center">Enabled</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -724,6 +534,9 @@ export default function App() {
                   {filteredItems.map((item) => (
                     <tr
                       key={item.id}
+                      draggable
+                      onDragStart={event => startItemDrag(event, item)}
+                      title="Drag into chat, or use Ask AI"
                       onClick={() => setEditingItem(item)}
                       className="hover:bg-slate-800/40 cursor-pointer transition-colors"
                     >
@@ -754,8 +567,9 @@ export default function App() {
                             {item.currentVersion} → {item.latestVersion}
                           </span>
                         ) : (
-                          <span className="text-slate-400">{item.currentVersion || "v1.0.0"}</span>
+                          <span className="text-slate-400">{item.currentVersion || "Not verified"}</span>
                         )}
+                        <div role="status" className="mt-1 max-w-48 whitespace-normal text-slate-400">{item.updateStatus}</div>
                       </td>
                       <td className="px-4 py-3 font-mono text-[11px] text-slate-400 max-w-xs truncate">
                         {item.customCommand || item.defaultInstallCommand}
@@ -772,22 +586,13 @@ export default function App() {
                           {item.installed ? "Installed" : "Install"}
                         </button>
                       </td>
-                      <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={(e) => handleToggleEnable(item.id, e)}
-                          className={`relative inline-flex h-4.5 w-8 items-center rounded-full transition-colors ${
-                            item.enabled ? "bg-indigo-600" : "bg-slate-700"
-                          }`}
-                        >
-                          <span
-                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                              item.enabled ? "translate-x-4" : "translate-x-0.5"
-                            }`}
-                          />
-                        </button>
-                      </td>
                       <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
+                          <button type="button" onClick={event => void handleCheckUpdates(item.id, event)} disabled={isCheckingUpdates}
+                            aria-label={`Check updates for ${item.name}`} title="Check updates without installing"
+                            className="p-1 text-slate-400 hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50">
+                            <RefreshCw className={`h-3.5 w-3.5 ${checkingUpdateIds.includes(item.id) ? "animate-spin" : ""}`} />
+                          </button>
                           {item.hasUpdate && (
                             <button
                               onClick={(e) => handleUpdateItem(item.id, e)}
@@ -800,7 +605,7 @@ export default function App() {
                           <button
                             onClick={() => setEditingItem(item)}
                             className="p-1 text-slate-400 hover:text-white"
-                            title="Edit"
+                            title="View card details"
                           >
                             <Edit3 className="h-3.5 w-3.5" />
                           </button>
@@ -812,9 +617,9 @@ export default function App() {
                             <Sparkles className="h-3.5 w-3.5" />
                           </button>
                           <button
-                            onClick={(e) => handleRemoveItem(item.id, item.name, e)}
+                            onClick={(e) => handleRemoveItem(item, e)}
                             className="p-1 text-slate-500 hover:text-rose-400"
-                            title="Remove card"
+                            title="Ask chat to remove card"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -835,25 +640,24 @@ export default function App() {
         onClose={() => setIsAiPaneOpen(false)}
         items={items}
         prefilledPrompt={prefilledAiPrompt}
+        submittedPrompt={submittedAiPrompt}
+        onClearSubmittedPrompt={() => setSubmittedAiPrompt(undefined)}
         onClearPrefilledPrompt={() => setPrefilledAiPrompt(undefined)}
+        onInventoryChanged={refreshCatalog}
       />
 
       {/* Item Custom Configuration Modal */}
-      <CustomConfigModal
+      {editingItem && <CustomConfigModal
+        key={editingItem.id}
         item={editingItem}
         isOpen={Boolean(editingItem)}
         onClose={() => setEditingItem(null)}
-        onSave={handleSaveItem}
         onAskAi={(prompt) => {
           setIsAiPaneOpen(true);
           setPrefilledAiPrompt(prompt);
         }}
         onUpdateItem={handleUpdateItem}
-        onRemoveItem={(id) => {
-          setItems((prev) => prev.filter((i) => i.id !== id));
-          setEditingItem(null);
-        }}
-      />
+      />}
 
       {/* Release & Update Center Modal */}
       <UpdateModal
@@ -867,23 +671,10 @@ export default function App() {
           setPrefilledAiPrompt(prompt);
         }}
         isChecking={isCheckingUpdates}
-        onCheckAgain={handleCheckUpdates}
+        onCheckAgain={() => void handleCheckUpdates()}
         lastCheckedTime={lastCheckedTime}
       />
 
-      {/* Add Item Modal */}
-      <AddItemModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onAdd={handleAddItem}
-      />
-
-      {/* Export & Script Generator Modal */}
-      <ExportModal
-        isOpen={isExportModalOpen}
-        onClose={() => setIsExportModalOpen(false)}
-        items={items}
-      />
     </div>
   );
 }

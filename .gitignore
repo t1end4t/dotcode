@@ -69,3 +69,4 @@ package-lock.json
 # nix stuff
 .devenv/
 .direnv/
+frontend/dist/

@@ -37,4 +37,4 @@
 37. [https://github.com/DuarteSantos8/openGym](https://github.com/DuarteSantos8/openGym)
 38. [https://github.com/mattpocock/skills](https://github.com/mattpocock/skills)
 39. [https://github.com/storytold/vectorcraft](https://github.com/storytold/vectorcraft)
-40. 
+40. [https://github.com/magnitudedev/magnitude](https://github.com/magnitudedev/magnitude)
