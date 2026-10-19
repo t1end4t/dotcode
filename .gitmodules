@@ -1,3 +1,0 @@
-[submodule "external/claude-skills"]
-	path = external/claude-skills
-	url = https://github.com/anthropics/skills

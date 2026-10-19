@@ -1,50 +1,24 @@
-# dotcode
+# TypeScript Fullstack Template
 
-Shared config home for coding agents.
+Minimal TypeScript app with:
 
-## Structure
+- Backend: Express
+- Frontend: Vite + vanilla TypeScript
+- Dev shell: devenv/Nix TypeScript support
 
-```text
-claude/       # Claude Code config → ~/.claude/
-codex/        # Codex CLI config   → ~/.codex/
-opencode/     # OpenCode config    → ~/.config/opencode/
-external/     # Claude Code skills submodule (Claude only)
-```
-
-## Install
-
-Select one or more agents first, then pass installer options.
+## Run
 
 ```bash
-git submodule update --init external/claude-skills
-./install.sh --codex --core
-./install.sh --claude --core
-./install.sh --opencode --core
-./install.sh --all-agents --all
-./install.sh --claude --list
+npm install
+npm run dev
 ```
 
-Agent flags:
+Open <http://localhost:5173>.
 
-- `--codex` installs to `~/.codex`
-- `--claude` installs to `~/.claude`
-- `--opencode` installs to `~/.config/opencode`
-- `--all-agents` installs every supported agent
-
-Common installer options: `--core`, `--all`. Claude also supports `--list` and
-`--mcp`.
-
-The Claude install copies every skill from `external/claude-skills/skills/` into
-`~/.claude/skills/`. Codex and OpenCode install no skills — the shared skills are
-Claude Code skills and are not supported by those agents.
-
-Installer behavior: selected repo-owned files are installed or updated without
-pruning unrelated files from the target config directories.
-
-## Uninstall
+## Scripts
 
 ```bash
-./uninstall.sh --codex --core
-./uninstall.sh --opencode --core
-./uninstall.sh --all-agents --all
+npm run dev     # backend + frontend
+npm run build   # compile both apps
+npm run start   # run built backend
 ```
