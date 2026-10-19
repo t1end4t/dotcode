@@ -1,0 +1,7 @@
+{
+  "name": "DotCode Hub - Tool & Resource Manager",
+  "description": "Manage, install, and customize curated developer tools, applications, courses, and engineering resources with an integrated AI assistant.",
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
