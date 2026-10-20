@@ -1,10 +1,12 @@
 import express from "express";
+import { createServer as createHttpServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { attachAgent, isLocalRequest } from "./agent.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+const server = createHttpServer(app);
 const port = Number(process.env.PORT ?? 3000);
 let vite: import("vite").ViteDevServer | undefined;
 
@@ -21,7 +23,7 @@ app.use("/api", (_req, res) => res.status(404).json({ error: "Unknown API endpoi
 if (process.env.NODE_ENV !== "production") {
   const { createServer } = await import("vite");
   vite = await createServer({
-    server: { middlewareMode: true, host: "0.0.0.0", proxy: {} },
+    server: { middlewareMode: true, host: "0.0.0.0", proxy: {}, hmr: { server } },
     appType: "spa",
     root: path.resolve(__dirname, "frontend"),
   });
@@ -33,7 +35,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 const host = process.env.HOST ?? "0.0.0.0";
-const server = app.listen(port, host, () => {
+server.listen(port, host, () => {
   const address = server.address();
   if (!address || typeof address === "string") return;
   const url = `http://127.0.0.1:${address.port}`;

@@ -7,7 +7,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { setTimeout } from 'node:timers/promises';
 
-test('development opens the browser at the listening HTTP address', { timeout: 15000 }, async () => {
+test('development opens the browser and serves HMR at the listening HTTP address', { timeout: 15000 }, async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-browser-'));
   const browser = path.join(directory, 'browser.js');
   await writeFile(browser, `
@@ -32,6 +32,14 @@ test('development opens the browser at the listening HTTP address', { timeout: 1
     assert.match(output, /BROWSER_OPEN:http:\/\/127\.0\.0\.1:[1-9]\d*/);
     const opened = output.match(/BROWSER_OPEN:(\S+)/)[1];
     assert.ok(output.includes(`DotCode: ${opened}`));
+    const socket = new WebSocket(opened.replace(/^http/, 'ws'), 'vite-hmr');
+    try {
+      const [message] = await once(socket, 'message', { signal: AbortSignal.timeout(3000) });
+      assert.equal(JSON.parse(message.data).type, 'connected');
+      assert.doesNotMatch(output, /WebSocket server error/);
+    } finally {
+      socket.close();
+    }
   } finally {
     child.kill('SIGKILL');
     await closed;

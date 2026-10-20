@@ -16,11 +16,6 @@ import {
   Github,
   Globe,
   Eraser,
-  FolderOpen,
-  Folder,
-  ArrowUp,
-  Home,
-  ChevronDown,
 } from "lucide-react";
 import { ManageableItem } from "../data/items";
 import { readApiJson } from "../useCatalog";
@@ -30,11 +25,11 @@ const chatLinkPattern = /(\[[^\]\n]+\]\(https?:\/\/[^\s<>"'`)]+\)|https?:\/\/[^\
 
 const renderLinks = (text: string, linked: boolean, keyPrefix = "") => text.split(linked ? chatLinkPattern : urlPattern).map((part, index) => {
   if (index % 2 === 0) return part;
-  if (!linked) return <span key={`${keyPrefix}${index}`} className="text-sky-300">{part}</span>;
+  if (!linked) return <span key={`${keyPrefix}${index}`} className="text-(--ctp-sky)">{part}</span>;
   const markdown = /^\[([^\]\n]+)\]\((https?:\/\/[^\s<>"'`)]+)\)$/i.exec(part);
   const href = markdown?.[2] ?? part;
   return (
-    <a key={`${keyPrefix}${index}`} href={href} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] rounded-sm bg-slate-950/40 px-0.5 text-sky-300 underline decoration-sky-300/50 underline-offset-2 hover:bg-slate-950/60 focus-visible:outline-2 focus-visible:outline-sky-300">
+    <a key={`${keyPrefix}${index}`} href={href} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] rounded-sm bg-(--ctp-mantle)/40 px-0.5 text-(--ctp-sky) underline decoration-(--ctp-sky)/50 underline-offset-2 hover:bg-(--ctp-mantle)/60 focus-visible:outline-2 focus-visible:outline-(--ctp-sky)">
       {/^https?:\/\/github\.com(?:[/?#]|$)/i.test(href) ? <Github aria-hidden="true" className="mr-1 inline h-3 w-3" /> : <Globe aria-hidden="true" className="mr-1 inline h-3 w-3" />}{href}
     </a>
   );
@@ -45,10 +40,10 @@ const renderInline = (text: string, key: string) => text.split(/(`[^`\n]+`|\*\*[
   if (part.startsWith("`")) {
     const code = part.slice(1, -1);
     return <code key={`${key}-${index}`} tabIndex={code.length > 120 ? 0 : undefined} className={code.length > 120
-      ? "my-2 block max-h-64 max-w-full overflow-auto whitespace-pre rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-[11px] leading-5 text-amber-200 focus-visible:outline-2 focus-visible:outline-sky-300"
-      : "rounded bg-slate-950/70 px-1 py-0.5 font-mono text-[0.92em] text-amber-200 [overflow-wrap:anywhere]"}>{code}</code>;
+      ? "my-2 block max-h-64 max-w-full overflow-auto whitespace-pre rounded-lg border border-(--ctp-surface1) bg-(--ctp-mantle) p-3 font-mono text-[11px] leading-5 text-(--ctp-yellow) focus-visible:outline-2 focus-visible:outline-(--ctp-sky)"
+      : "rounded bg-(--ctp-mantle)/70 px-1 py-0.5 font-mono text-[0.92em] text-(--ctp-yellow) [overflow-wrap:anywhere]"}>{code}</code>;
   }
-  return <strong key={`${key}-${index}`} className="font-semibold text-slate-50">{renderLinks(part.slice(2, -2), true, `${key}-${index}-`)}</strong>;
+  return <strong key={`${key}-${index}`} className="font-semibold text-(--ctp-text)">{renderLinks(part.slice(2, -2), true, `${key}-${index}-`)}</strong>;
 });
 
 // ponytail: chat Markdown subset; use a parser when tables, nesting, or HTML-like Markdown are needed.
@@ -64,12 +59,12 @@ const renderMarkdown = (text: string) => {
       const code = [];
       for (index++; index < lines.length && !/^\s*```\s*$/.test(lines[index]); index++) code.push(lines[index]);
       index++;
-      blocks.push(<pre key={blocks.length} tabIndex={0} aria-label="Code block" className="max-h-72 max-w-full overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-3 text-[11px] leading-5 text-slate-200 focus-visible:outline-2 focus-visible:outline-sky-300"><code className="whitespace-pre font-mono">{code.join("\n")}</code></pre>);
+      blocks.push(<pre key={blocks.length} tabIndex={0} aria-label="Code block" className="max-h-72 max-w-full overflow-auto rounded-lg border border-(--ctp-surface1) bg-(--ctp-mantle) p-3 text-[11px] leading-5 text-(--ctp-text) focus-visible:outline-2 focus-visible:outline-(--ctp-sky)"><code className="whitespace-pre font-mono">{code.join("\n")}</code></pre>);
       continue;
     }
     const heading = /^#{1,6}\s+(.+)$/.exec(line);
     if (heading) {
-      blocks.push(<h3 key={blocks.length} className="text-[13px] font-semibold text-slate-50">{renderInline(heading[1], `h${blocks.length}`)}</h3>);
+      blocks.push(<h3 key={blocks.length} className="text-[13px] font-semibold text-(--ctp-text)">{renderInline(heading[1], `h${blocks.length}`)}</h3>);
       index++;
       continue;
     }
@@ -82,7 +77,7 @@ const renderMarkdown = (text: string) => {
         index++;
       }
       const List = ordered ? "ol" : "ul";
-      blocks.push(<List key={blocks.length} className={`${ordered ? "list-decimal" : "list-disc"} space-y-1 pl-5 marker:text-slate-500`}>{items.map((item, itemIndex) => <li key={itemIndex} className="whitespace-pre-wrap pl-0.5">{renderInline(item, `l${blocks.length}-${itemIndex}`)}</li>)}</List>);
+      blocks.push(<List key={blocks.length} className={`${ordered ? "list-decimal" : "list-disc"} space-y-1 pl-5 marker:text-(--ctp-overlay2)`}>{items.map((item, itemIndex) => <li key={itemIndex} className="whitespace-pre-wrap pl-0.5">{renderInline(item, `l${blocks.length}-${itemIndex}`)}</li>)}</List>);
       continue;
     }
     const paragraph = [];
@@ -93,6 +88,14 @@ const renderMarkdown = (text: string) => {
 };
 
 export const renderChatText = (text: string, linked: boolean) => linked ? renderMarkdown(text) : renderLinks(text, false);
+
+// ponytail: unwrap known shell quotes for display only; leave other forms raw until a shell parser is needed.
+export const formatToolCommand = (command: string) => {
+  const match = /^(?:\S*\/)?(?:ba|z)?sh\s+-l?c\s+(?:'((?:[^']|'"'"'|'\\'')*)'|"([^"\\]*)")$/.exec(command.trim());
+  if (!match) return command;
+  const script = (match[1] ?? match[2]).replace(/'"'"'|'\\''/g, "'");
+  return script.replace(/\s+/g, " ").trim() || command;
+};
 
 interface Message {
   id: string;
@@ -107,8 +110,39 @@ interface Message {
 interface Step {
   id: string;
   label: string;
+  command?: string;
+  failed?: boolean;
   output?: string;
 }
+
+export const ToolSteps = ({ steps }: { steps: Step[] }) => (
+  <ol aria-label="Tool activity" className="w-full min-w-0 max-w-full space-y-0.5 font-mono text-[11px] leading-5">
+    {steps.map((step) => {
+      const row = (
+        <>
+          <span aria-hidden="true" className="shrink-0">•</span>
+          <span className="min-w-0 truncate">{step.label}</span>
+        </>
+      );
+      const rowClass = `flex min-w-0 items-center gap-1.5 rounded px-1 ${step.failed ? "text-(--ctp-red)" : "text-(--ctp-overlay2)"}`;
+      return (
+        <li key={step.id} className="min-w-0">
+          {step.command || step.output || step.label.length > 80 || step.label.includes("\n") ? (
+            <details>
+              <summary title={step.label} className={`${rowClass} cursor-pointer hover:bg-(--ctp-surface0)/60 focus-visible:outline-2 focus-visible:outline-(--ctp-sky)`}>{row}</summary>
+              <div className="ml-3 mt-1 space-y-1 border-l border-(--ctp-surface1) pl-2">
+                {step.command
+                  ? <pre tabIndex={0} aria-label="Full command" className="max-h-32 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded bg-(--ctp-mantle) p-2 text-(--ctp-subtext1) focus-visible:outline-2 focus-visible:outline-(--ctp-sky)">{step.command}</pre>
+                  : <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-(--ctp-subtext0)">{step.label}</p>}
+                {step.output && <pre tabIndex={0} aria-label="Command output" className="max-h-48 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded bg-(--ctp-mantle) p-2 text-[10px] text-(--ctp-subtext0) focus-visible:outline-2 focus-visible:outline-(--ctp-sky)">{step.output}</pre>}
+              </div>
+            </details>
+          ) : <div title={step.label} className={rowClass}>{row}</div>}
+        </li>
+      );
+    })}
+  </ol>
+);
 
 interface AiPaneProps {
   isOpen: boolean;
@@ -119,6 +153,8 @@ interface AiPaneProps {
   onClearSubmittedPrompt: () => void;
   onClearPrefilledPrompt?: () => void;
   onInventoryChanged: () => void;
+  workspace?: string;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 export const AiPane: React.FC<AiPaneProps> = ({
@@ -130,23 +166,19 @@ export const AiPane: React.FC<AiPaneProps> = ({
   onClearSubmittedPrompt,
   onClearPrefilledPrompt,
   onInventoryChanged,
+  workspace = "",
+  onBusyChange,
 }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "initial-welcome",
       role: "model",
-      text: "Ask me to add, edit, or remove cards, or install, update, or uninstall tools. Card changes save automatically. Installation changes need an approved plan.",
+      text: "Ask me to manage cards or install, update, or uninstall tools in the target folder. No separate installation plan approval. I stop for privileges or security-sensitive changes; desktop integration still needs approval.",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [workspace, setWorkspace] = useState("");
-  const [folders, setFolders] = useState<{ dir: string; parent: string; home: string; entries: string[] } | null>(null);
-  const [folderError, setFolderError] = useState("");
-  const [folderLoading, setFolderLoading] = useState(false);
-  const folderDialog = useRef<HTMLDialogElement>(null);
-  const folderButton = useRef<HTMLButtonElement>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -160,47 +192,8 @@ export const AiPane: React.FC<AiPaneProps> = ({
 
   const installedCount = items.filter((i) => i.installed).length;
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        let saved = "";
-        try { saved = localStorage.getItem("dotcode_codex_workspace") || ""; } catch {}
-        const data = await readApiJson(await fetch("/api/workspace", { headers: saved ? { "x-dotcode-workspace": saved } : {} }));
-        if (!cancelled) {
-          setWorkspace(data.workspace);
-        }
-      } catch (error) {
-        if (!cancelled) setFolderError(error instanceof Error ? error.message : "Codex folder unavailable.");
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const browseFolder = async (dir: string) => {
-    setFolderLoading(true);
-    setFolderError("");
-    try {
-      setFolders(await readApiJson(await fetch(`/api/folders?dir=${encodeURIComponent(dir)}`)));
-    } catch (error) {
-      setFolderError(error instanceof Error ? error.message : "Folders unavailable.");
-    } finally { setFolderLoading(false); }
-  };
-
-  const selectFolder = async () => {
-    if (isLoading || folderLoading || !folders) return;
-    setFolderLoading(true);
-    setFolderError("");
-    try {
-      const data = await readApiJson(await fetch("/api/workspace", { headers: { "x-dotcode-workspace": folders.dir } }));
-      localStorage.setItem("dotcode_codex_workspace", data.workspace);
-      setWorkspace(data.workspace);
-      setMessages(previous => previous.map(message => ({ ...message, planId: undefined })));
-      folderDialog.current?.close();
-    } catch (error) {
-      setFolderError(error instanceof Error ? error.message : "Codex folder unavailable.");
-    } finally { setFolderLoading(false); }
-  };
+  useEffect(() => { setMessages(previous => previous.map(message => ({ ...message, planId: undefined }))); }, [workspace]);
+  useEffect(() => { onBusyChange?.(isLoading); }, [isLoading, onBusyChange]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -247,7 +240,7 @@ export const AiPane: React.FC<AiPaneProps> = ({
     }]);
   };
 
-  const runAgent = async (body: { mode: "plan"; message: string; history: { role: Message["role"]; text: string }[] } | { mode: "execute"; planId: string }) => {
+  const runAgent = async (body: { mode: "chat"; message: string; history: { role: Message["role"]; text: string }[] } | { mode: "execute"; planId: string }) => {
     const controller = new AbortController();
     controllerRef.current = controller;
     setIsLoading(true);
@@ -261,7 +254,7 @@ export const AiPane: React.FC<AiPaneProps> = ({
       const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-dotcode-workspace": workspace },
-        body: JSON.stringify({ ...body, ...(body.mode === "plan" ? { catalog: items.map(({ githubUrl, name, description, category }) => ({ githubUrl, name, description, category })) } : {}) }),
+        body: JSON.stringify({ ...body, ...(body.mode === "chat" ? { catalog: items.map(({ githubUrl, name, description, category }) => ({ githubUrl, name, description, category })) } : {}) }),
         signal: controller.signal,
       });
       if (!response.ok || !response.body) {
@@ -280,7 +273,7 @@ export const AiPane: React.FC<AiPaneProps> = ({
         } else if (event.type === "error") {
           terminal = true;
           finish(`Error: ${event.message}`);
-          if (body.mode === "execute") onInventoryChanged();
+          onInventoryChanged();
         } else if (event.type === "notice" && event.message) {
           runSteps = [...runSteps, { id: `notice-${runSteps.length}`, label: event.message }];
           setSteps(runSteps);
@@ -290,13 +283,15 @@ export const AiPane: React.FC<AiPaneProps> = ({
           const state = item.status === "in_progress" || event.type === "item.started" ? "Running" : item.status === "failed" || (item.exit_code ?? 0) !== 0 ? "Failed" : "Ran";
           const step: Step = {
             id: item.id,
-            label: item.type === "command_execution" ? `${state} ${item.command}`
+            label: item.type === "command_execution" ? `${state} ${formatToolCommand(item.command ?? "")}`
               : item.type === "reasoning" || item.type === "agent_message" ? item.text || "Thinking"
               : item.type === "web_search" ? `Searched ${item.query}`
               : item.type === "mcp_tool_call" ? `${state} ${item.server}.${item.tool}`
               : item.type === "file_change" ? `Changed ${item.changes?.map(change => `${change.kind} ${change.path}`).join(", ")}`
               : item.type === "todo_list" ? item.items?.map(todo => `${todo.completed ? "[done]" : "[todo]"} ${todo.text}`).join("\n") || "Updated plan"
               : item.message || item.type,
+            command: item.type === "command_execution" ? item.command : undefined,
+            failed: state === "Failed",
             output: item.aggregated_output?.slice(-4000),
           };
           runSteps = runSteps.some(previous => previous.id === step.id)
@@ -318,7 +313,7 @@ export const AiPane: React.FC<AiPaneProps> = ({
     } catch (err) {
       const stopped = err instanceof DOMException && err.name === "AbortError";
       finish(`Error: ${stopped ? "Stopped. Commands may have partially changed the machine; inspect before retrying." : err instanceof Error ? err.message : "Unknown error"}`);
-      if (body.mode === "execute") onInventoryChanged();
+      onInventoryChanged();
     } finally {
       controllerRef.current = null;
       setIsLoading(false);
@@ -327,7 +322,7 @@ export const AiPane: React.FC<AiPaneProps> = ({
 
   const handleSend = async (textToSend?: string) => {
     const query = (textToSend || input).trim();
-    if (!query || isLoading || !workspace || folderLoading) return;
+    if (!query || isLoading || !workspace) return;
     const history = messages.slice(-10).map(({ role, text }) => ({ role, text }));
     setMessages((prev) => [...prev, {
       id: `user-${crypto.randomUUID()}`,
@@ -336,7 +331,7 @@ export const AiPane: React.FC<AiPaneProps> = ({
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     }]);
     if (!textToSend) setInput("");
-    await runAgent({ mode: "plan", message: query, history });
+    await runAgent({ mode: "chat", message: query, history });
   };
 
   useEffect(() => {
@@ -347,7 +342,7 @@ export const AiPane: React.FC<AiPaneProps> = ({
   }, [submittedPrompt, isLoading]);
 
   const approvePlan = async (planId: string) => {
-    if (isLoading || !confirm("Run this plan on your machine? Commands may install, change, or remove software.")) return;
+    if (isLoading || !confirm("Apply the desktop integration changes shown? This changes launcher files outside the target folder.")) return;
     setMessages((previous) => previous.map((message) => message.planId === planId ? { ...message, planId: undefined } : message));
     await runAgent({ mode: "execute", planId });
   };
@@ -375,6 +370,11 @@ export const AiPane: React.FC<AiPaneProps> = ({
 
   return (
     <aside
+      id="assistant-pane"
+      aria-labelledby="assistant-pane-title"
+      onKeyDown={event => {
+        if (event.key === "Escape") onClose();
+      }}
       onDragOver={event => {
         if (event.dataTransfer.types.some(type => ["text/uri-list", "text/plain"].includes(type))) {
           event.preventDefault();
@@ -394,82 +394,53 @@ export const AiPane: React.FC<AiPaneProps> = ({
         setInput(previous => [previous.trimEnd(), ...new Set(urls)].filter(Boolean).join("\n"));
         inputRef.current?.focus();
       }}
-      className={`fixed inset-y-0 right-0 z-40 flex flex-col border-l border-slate-800 bg-slate-900/95 backdrop-blur-xl transition-all duration-200 shadow-2xl ${
+      className={`absolute inset-y-0 right-0 z-40 flex flex-col border-l border-(--ctp-surface0) bg-(--ctp-base)/95 backdrop-blur-xl transition-all duration-200 shadow-2xl lg:relative lg:z-auto lg:shrink-0 ${
         isExpanded ? "w-full md:w-[620px]" : "w-full sm:w-[420px] lg:w-[460px]"
       }`}
     >
-      {isDragging && <div role="status" className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center border-2 border-indigo-400 bg-slate-950/90 text-sm text-indigo-200">Drop GitHub items to add them to your message</div>}
+      {isDragging && <div role="status" className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center border-2 border-(--ctp-mauve) bg-(--ctp-mantle)/90 text-sm text-(--ctp-lavender)">Drop GitHub items to add them to your message</div>}
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 bg-slate-950/60">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-(--ctp-surface0)/80 bg-(--ctp-mantle)/60">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-(--ctp-mauve)/10 border border-(--ctp-mauve)/20 text-(--ctp-mauve)">
             <Sparkles className="h-4 w-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-slate-100">DotCode Copilot</h2>
-              <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+              <h2 id="assistant-pane-title" className="text-sm font-semibold text-(--ctp-text)">DotCode Copilot</h2>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-(--ctp-mauve) bg-(--ctp-mauve)/10 px-1.5 py-0.5 rounded border border-(--ctp-mauve)/20">
                 Codex
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-(--ctp-subtext0)">
               {installedCount} verified · {items.length} tracked
             </p>
-            <button ref={folderButton} type="button" aria-label="Codex target folder" aria-haspopup="dialog" disabled={isLoading || folderLoading} title={workspace || "Choose Codex working folder"} onClick={() => {
-              folderDialog.current?.showModal();
-              void browseFolder(workspace || "~/");
-            }} className="mt-1 flex w-fit max-w-48 cursor-pointer items-center gap-1 text-[11px] text-slate-400 hover:text-slate-200 focus-visible:outline-2 focus-visible:outline-indigo-400 disabled:opacity-40">
-                <FolderOpen aria-hidden="true" className="h-3 w-3 shrink-0" />
-                <span className="truncate">{workspace.split("/").filter(Boolean).pop() || "Target folder"}</span>
-                <ChevronDown aria-hidden="true" className="h-3 w-3 shrink-0" />
-            </button>
-            <dialog ref={folderDialog} aria-labelledby="codex-folder-title" onClose={() => folderButton.current?.focus()} className="fixed inset-0 m-auto max-h-[85dvh] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-4 text-slate-100 shadow-2xl backdrop:bg-black/60">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 id="codex-folder-title" className="text-sm font-semibold">Choose target folder</h2>
-                  <button type="button" autoFocus aria-label="Close folder picker" onClick={() => folderDialog.current?.close()} className="rounded p-1 text-slate-400 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300"><X aria-hidden="true" className="h-4 w-4" /></button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button type="button" aria-label="Parent folder" disabled={folderLoading || !folders || folders.parent === folders.dir} onClick={() => folders && void browseFolder(folders.parent)} className="rounded p-1 text-slate-300 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:opacity-40"><ArrowUp aria-hidden="true" className="h-4 w-4" /></button>
-                  <button type="button" aria-label="Home folder" disabled={folderLoading} onClick={() => void browseFolder(folders?.home || "~/")} className="rounded p-1 text-slate-300 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:opacity-40"><Home aria-hidden="true" className="h-4 w-4" /></button>
-                  <p aria-live="polite" className="min-w-0 break-all font-mono text-[11px] text-slate-400">{folders?.dir || workspace}</p>
-                </div>
-                <div aria-label="Subfolders" aria-busy={folderLoading} className="max-h-[40dvh] min-h-24 overflow-y-auto rounded border border-slate-800 p-1">
-                  {folderLoading ? <p role="status" className="p-2 text-xs text-slate-400">Loading folders...</p> : folders?.entries.map(name => (
-                    <button type="button" key={name} onClick={() => void browseFolder(`${folders.dir}/${name}`)} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-200 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300">
-                      <Folder aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" /><span className="break-all">{name}</span>
-                    </button>
-                  ))}
-                  {!folderLoading && folders?.entries.length === 0 && <p className="p-2 text-xs text-slate-400">No subfolders</p>}
-                </div>
-                <p className="text-[11px] text-slate-500">Changes only where Codex works. The saved catalog stays in DotCode data.</p>
-                {folderError && <p role="alert" className="break-words text-xs text-rose-300">{folderError}</p>}
-                <div className="flex justify-end gap-2">
-                  <button type="button" onClick={() => folderDialog.current?.close()} className="rounded px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300">Cancel</button>
-                  <button type="button" onClick={() => void selectFolder()} disabled={isLoading || folderLoading || !folders || !!folderError} className="rounded bg-indigo-600 px-3 py-2 text-xs text-white focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:opacity-50">Use this folder</button>
-                </div>
-              </div>
-            </dialog>
+
           </div>
         </div>
 
         <div className="flex items-center gap-1">
-          <button type="button" onClick={clearChat} disabled={isLoading} aria-label="Clear conversation" title="Clear conversation" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-40">
+          <button type="button" onClick={clearChat} disabled={isLoading} aria-label="Clear conversation" title="Clear conversation" className="rounded-md p-1.5 text-(--ctp-subtext0) hover:bg-(--ctp-surface0) hover:text-(--ctp-text) focus-visible:ring-2 focus-visible:ring-(--ctp-mauve) disabled:opacity-40">
             <Eraser aria-hidden="true" className="h-4 w-4" />
           </button>
           <button
+            type="button"
             onClick={() => setIsExpanded(!isExpanded)}
+            aria-label="Expand assistant"
+            aria-pressed={isExpanded}
             title={isExpanded ? "Standard width" : "Expand width"}
-            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-md transition-colors"
+            className="p-1.5 text-(--ctp-subtext0) hover:text-(--ctp-text) hover:bg-(--ctp-surface0) rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-(--ctp-mauve)"
           >
-            {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            {isExpanded ? <Minimize2 aria-hidden="true" className="h-4 w-4" /> : <Maximize2 aria-hidden="true" className="h-4 w-4" />}
           </button>
           <button
+            type="button"
             onClick={onClose}
-            title="Close AI pane"
-            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-md transition-colors"
+            aria-label="Close assistant"
+            title="Close assistant"
+            className="p-1.5 text-(--ctp-subtext0) hover:text-(--ctp-text) hover:bg-(--ctp-surface0) rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-(--ctp-mauve)"
           >
-            <X className="h-4 w-4" />
+            <X aria-hidden="true" className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -482,19 +453,17 @@ export const AiPane: React.FC<AiPaneProps> = ({
             className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
           >
             <div className="flex items-center gap-1.5 mb-1 px-1">
-              <span className="text-[11px] font-medium text-slate-400">
+              <span className="text-[11px] font-medium text-(--ctp-subtext0)">
                 {msg.role === "user" ? "You" : "DotCode AI"}
               </span>
-              <span className="text-[10px] text-slate-600">· {msg.timestamp}</span>
+              <span className="text-[10px] text-(--ctp-overlay1)">· {msg.timestamp}</span>
             </div>
 
             {msg.duration && (
-              <details className="mb-1.5 max-w-[92%] px-1 text-[11px] text-slate-500">
-                <summary className="cursor-pointer hover:text-slate-300">Worked for {msg.duration}{msg.steps?.length ? ` · ${msg.steps.length} steps` : ""}</summary>
-                <div className="mt-1 space-y-0.5 border-l border-slate-700 pl-2">
-                  {msg.steps?.length ? msg.steps.map((step) => step.output ? (
-                    <details key={step.id}><summary className="cursor-pointer whitespace-pre-wrap break-all">• {step.label}</summary><pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-950 p-2 text-[10px] text-slate-400">{step.output}</pre></details>
-                  ) : <div key={step.id} className="whitespace-pre-wrap break-all">• {step.label}</div>) : <div>No intermediate steps.</div>}
+              <details className="mb-1.5 max-w-[92%] px-1 text-[11px] text-(--ctp-overlay2)">
+                <summary className="cursor-pointer hover:text-(--ctp-subtext1)">Worked for {msg.duration}{msg.steps?.length ? ` · ${msg.steps.length} steps` : ""}</summary>
+                <div className="mt-1">
+                  {msg.steps?.length ? <ToolSteps steps={msg.steps} /> : <div>No intermediate steps.</div>}
                 </div>
               </details>
             )}
@@ -502,11 +471,11 @@ export const AiPane: React.FC<AiPaneProps> = ({
             <div
               className={`relative group min-w-0 max-w-[92%] rounded-xl px-3.5 py-2.5 text-xs sm:text-[13px] leading-relaxed shadow-sm ${
                 msg.role === "user"
-                  ? "bg-indigo-600 text-white rounded-tr-none"
-                  : "bg-slate-800/90 border border-slate-700/60 text-slate-200 rounded-tl-none"
+                  ? "bg-(--ctp-mauve)/15 border border-(--ctp-mauve)/30 text-(--ctp-text) rounded-tr-none"
+                  : "bg-(--ctp-surface0)/90 border border-(--ctp-surface1)/60 text-(--ctp-text) rounded-tl-none"
               }`}
             >
-              {msg.duration && <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-400">{msg.text.startsWith("Error:") ? "Error" : "Final answer"}</div>}
+              {msg.duration && <div className="mb-1 text-[10px] uppercase tracking-wider text-(--ctp-subtext0)">{msg.text.startsWith("Error:") ? "Error" : "Final answer"}</div>}
               <div className="min-w-0 space-y-2 break-words">
                 {renderChatText(msg.text, true)}
               </div>
@@ -515,10 +484,10 @@ export const AiPane: React.FC<AiPaneProps> = ({
                   type="button"
                   disabled={isLoading}
                   onClick={() => msg.planId && approvePlan(msg.planId)}
-                  className="mt-3 flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-40"
+                  className="mt-3 flex items-center gap-1 rounded-md bg-(--ctp-green) px-3 py-1.5 text-xs font-medium text-(--ctp-crust) hover:bg-(--ctp-green) disabled:opacity-40"
                 >
                   <Play className="h-3 w-3" />
-                  Approve and run on this machine
+                  Approve desktop integration
                 </button>
               )}
 
@@ -526,10 +495,10 @@ export const AiPane: React.FC<AiPaneProps> = ({
                 <button
                   onClick={() => copyToClipboard(msg.text, msg.id)}
                   title="Copy response"
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded bg-slate-700/80 hover:bg-slate-600 text-slate-300 transition-opacity"
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded bg-(--ctp-surface1)/80 hover:bg-(--ctp-overlay1) text-(--ctp-subtext1) transition-opacity"
                 >
                   {copiedId === msg.id ? (
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                    <Check className="h-3.5 w-3.5 text-(--ctp-green)" />
                   ) : (
                     <Copy className="h-3.5 w-3.5" />
                   )}
@@ -540,22 +509,13 @@ export const AiPane: React.FC<AiPaneProps> = ({
         ))}
 
         {isLoading && (
-          <div className="flex flex-col items-start">
+          <div className="flex w-full max-w-[92%] min-w-0 flex-col items-start">
             <div className="flex items-center gap-1.5 mb-1 px-1">
-              <span className="text-[11px] font-medium text-slate-400">DotCode AI</span>
-              <span className="text-[10px] text-slate-600">· working {elapsed(startedAt, now)}</span>
+              <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-(--ctp-mauve)" />
+              <span className="text-[11px] font-medium text-(--ctp-subtext0)">DotCode AI</span>
+              <span className="text-[10px] text-(--ctp-overlay1)">· working {elapsed(startedAt, now)}</span>
             </div>
-            <div className="rounded-xl rounded-tl-none border border-slate-700/60 bg-slate-800/90 px-4 py-3 text-xs text-slate-300 flex items-center gap-2">
-              <div className="flex space-x-1">
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400 [animation-delay:-0.3s]"></div>
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400 [animation-delay:-0.15s]"></div>
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400"></div>
-              </div>
-              <span className="text-slate-400 text-xs">{steps.at(-1)?.label || "Codex is inspecting..."}</span>
-            </div>
-            {steps.length > 0 && <details className="mt-2 max-w-full text-[11px] text-slate-500"><summary className="cursor-pointer">Show {steps.length} steps</summary>{steps.map((step) => step.output ? (
-              <details key={step.id}><summary className="cursor-pointer whitespace-pre-wrap break-all">• {step.label}</summary><pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-950 p-2 text-[10px] text-slate-400">{step.output}</pre></details>
-            ) : <div key={step.id} className="whitespace-pre-wrap break-all">• {step.label}</div>)}</details>}
+            {steps.length ? <ToolSteps steps={steps} /> : <p className="px-1 font-mono text-[11px] text-(--ctp-overlay2)">Codex is inspecting...</p>}
           </div>
         )}
 
@@ -563,10 +523,10 @@ export const AiPane: React.FC<AiPaneProps> = ({
       </div>
 
       {/* Input container */}
-      <div className="p-3 border-t border-slate-800 bg-slate-950/70">
-        <div className="relative rounded-xl border border-slate-700/80 bg-slate-900/90 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all shadow-inner">
+      <div className="p-3 border-t border-(--ctp-surface0) bg-(--ctp-mantle)/70">
+        <div className="relative rounded-xl border border-(--ctp-surface1)/80 bg-(--ctp-base)/90 focus-within:border-(--ctp-mauve) focus-within:ring-1 focus-within:ring-(--ctp-mauve) transition-all shadow-inner">
           {/* ponytail: highlight-only overlay; inline icons in the editor need contenteditable. */}
-          <div ref={highlightRef} aria-hidden="true" className="font-['Lilex_Nerd_Font',monospace] pointer-events-none absolute inset-x-0 top-0 h-[60px] overflow-hidden whitespace-pre-wrap break-words px-3.5 py-2.5 text-xs sm:text-[13px] text-slate-100">
+          <div ref={highlightRef} aria-hidden="true" className="font-['Lilex_Nerd_Font',monospace] pointer-events-none absolute inset-x-0 top-0 h-[60px] overflow-hidden whitespace-pre-wrap break-words px-3.5 py-2.5 text-xs sm:text-[13px] text-(--ctp-text)">
             {renderChatText(input, false)}{"\n"}
           </div>
           <textarea
@@ -578,18 +538,18 @@ export const AiPane: React.FC<AiPaneProps> = ({
             onKeyDown={handleKeyDown}
             placeholder="Add, edit, remove, install, update, or uninstall"
             rows={2}
-            className="font-['Lilex_Nerd_Font',monospace] relative block h-[60px] w-full resize-none break-words bg-transparent px-3.5 py-2.5 text-xs sm:text-[13px] text-transparent caret-slate-100 placeholder-slate-500 [scrollbar-width:none] focus:outline-none"
+            className="font-['Lilex_Nerd_Font',monospace] relative block h-[60px] w-full resize-none break-words bg-transparent px-3.5 py-2.5 text-xs sm:text-[13px] text-transparent caret-(--ctp-text) placeholder-(--ctp-overlay2) [scrollbar-width:none] focus:outline-none"
           />
-          <div className="flex items-center justify-between px-3 py-1.5 border-t border-slate-800/50 bg-slate-950/40">
-            <span className="text-[10px] text-slate-500">
-              Press <kbd className="px-1 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 font-mono">Enter</kbd> to send
+          <div className="flex items-center justify-between px-3 py-1.5 border-t border-(--ctp-surface0)/50 bg-(--ctp-mantle)/40">
+            <span className="text-[10px] text-(--ctp-overlay2)">
+              Press <kbd className="px-1 py-0.5 rounded bg-(--ctp-surface0) text-(--ctp-subtext0) border border-(--ctp-surface1) font-mono">Enter</kbd> to send
             </span>
             <div className="flex items-center gap-2">
-              {isLoading && <button type="button" onClick={() => controllerRef.current?.abort()} className="flex items-center gap-1 rounded-md border border-slate-700 px-3 py-1 text-xs text-slate-300"><Square className="h-3 w-3" />Stop</button>}
+              {isLoading && <button type="button" onClick={() => controllerRef.current?.abort()} className="flex items-center gap-1 rounded-md border border-(--ctp-surface1) px-3 py-1 text-xs text-(--ctp-subtext1)"><Square className="h-3 w-3" />Stop</button>}
               <button
                 onClick={() => handleSend()}
-                disabled={!input.trim() || isLoading || !workspace || folderLoading}
-                className="flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                disabled={!input.trim() || isLoading || !workspace}
+                className="flex items-center gap-1 rounded-md bg-(--ctp-mauve) px-3 py-1 text-xs font-medium text-(--ctp-crust) hover:bg-(--ctp-lavender) disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <span>Plan</span>
                 <Send className="h-3 w-3" />

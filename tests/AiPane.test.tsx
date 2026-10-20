@@ -1,11 +1,61 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import App from "../frontend/src/App";
-import { AiPane, renderChatText } from "../frontend/src/components/AiPane";
+import { AiPane, formatToolCommand, renderChatText, ToolSteps } from "../frontend/src/components/AiPane";
 import { CustomConfigModal } from "../frontend/src/components/CustomConfigModal";
 import { INITIAL_ITEMS } from "../frontend/src/data/items";
+
+test("tool command previews remove known shell wrappers without executing commands", () => {
+  assert.equal(formatToolCommand("/run/current-system/sw/bin/bash -lc 'npm test'"), "npm test");
+  assert.equal(formatToolCommand("bash -lc 'printf '\"'\"'%s\\n'\"'\"' hello\nnode --version'"), "printf '%s\\n' hello node --version");
+  assert.equal(formatToolCommand("sh -c 'printf '\\''hello'\\'''"), "printf 'hello'");
+  assert.equal(formatToolCommand('bash -lc "npm test"'), "npm test");
+  for (const command of ["npm test", "bash -lc 'npm test", "bash -lc 'npm test' extra", "custom-shell -lc 'npm test'"]) {
+    assert.equal(formatToolCommand(command), command);
+  }
+});
+
+test("tool activity uses compact expandable rows with full commands and bounded output", () => {
+  const command = `/run/current-system/sw/bin/bash -lc 'echo ${"checking ".repeat(100)}'`;
+  const html = renderToStaticMarkup(<ToolSteps steps={[
+    { id: "run", label: `Running ${formatToolCommand(command)}`, command, output: "<script>not HTML</script>\nverified" },
+    { id: "failed", label: "Failed npm test", command: "npm test", failed: true },
+    { id: "notice", label: "Inspecting files\nChecking configuration" },
+  ]} />);
+  assert.equal((html.match(/<details\b/g) || []).length, 3);
+  for (const summary of html.match(/<summary\b[^>]*>[\s\S]*?<\/summary>/g) || []) {
+    assert.match(summary, /truncate/);
+    assert.match(summary, /title=/);
+    assert.doesNotMatch(summary, /break-all|whitespace-pre-wrap|rounded-xl/);
+  }
+  assert.match(html, /font-mono/);
+  assert.match(html, /aria-label="Tool activity"/);
+  assert.match(html, /aria-label="Full command"/);
+  assert.match(html, /aria-label="Command output"/);
+  assert.match(html, /tabindex="0"/);
+  assert.match(html, /max-h-48[^\"]*overflow-auto/);
+  assert.match(html, /text-\(--ctp-red\)/);
+  assert.match(html, /&lt;script&gt;not HTML&lt;\/script&gt;/);
+  assert.ok(html.includes(command.replaceAll("'", "&#x27;")));
+  assert.match(html, /Inspecting files\nChecking configuration/);
+  assert.doesNotMatch(html, /<script|Show 3 steps|animate-bounce/);
+  const source = readFileSync(new URL("../frontend/src/components/AiPane.tsx", import.meta.url), "utf8");
+  assert.match(source, /<ToolSteps steps=\{steps\}/);
+  assert.match(source, /<ToolSteps steps=\{msg\.steps\}/);
+  assert.doesNotMatch(source, /steps\.at\(-1\)|Show \{steps\.length\} steps/);
+});
+
+test("assistant uses Catppuccin tokens throughout, including messages and Markdown", () => {
+  const source = readFileSync(new URL("../frontend/src/components/AiPane.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /(?:bg|text|border|ring|outline|caret|placeholder|decoration)-(?:slate|indigo|emerald|amber|rose|sky)-\d+|text-white/);
+  assert.match(source, /bg-\(--ctp-mantle\)/);
+  assert.match(source, /text-\(--ctp-text\)/);
+  assert.match(source, /bg-\(--ctp-mauve\)/);
+  assert.match(source, /text-\(--ctp-crust\)/);
+});
 
 test("multiple URLs become safe links without trailing sentence punctuation", () => {
   const html = renderToStaticMarkup(<>{renderChatText("Compare https://github.com/stablyai/orca and (https://chatgpt.com/).", true)}</>);
@@ -98,22 +148,48 @@ test("card details display metadata without manual editing or removal controls",
   assert.doesNotMatch(renderToStaticMarkup(<App />), /Reset Defaults/);
 });
 
-test("Codex folder selector and eraser clear-chat control belong in chat, not the dashboard", () => {
+test("the target folder picker belongs in the app header; chat keeps clear conversation", () => {
   const dashboard = renderToStaticMarkup(<App />);
   const chat = renderToStaticMarkup(<AiPane isOpen onClose={() => {}} items={INITIAL_ITEMS} onClearSubmittedPrompt={() => {}} onInventoryChanged={() => {}} />);
   assert.doesNotMatch(dashboard + chat, /Check Updates|Add Item|Export Script|Quick actions|Install from GitHub|Prepare scripts only/);
-  assert.doesNotMatch(dashboard, /Target folder|Use folder/);
-  assert.match(chat, /Target folder/);
-  assert.match(chat, /Use this folder/);
-  assert.match(chat, /aria-label="Parent folder"/);
-  assert.match(chat, /<dialog[^>]*aria-labelledby="codex-folder-title"/);
-  assert.match(chat, /aria-haspopup="dialog"/);
-  assert.match(chat, /aria-label="Close folder picker"/);
-  assert.match(chat, />Cancel<\/button>/);
+  const header = dashboard.slice(0, dashboard.indexOf('</header>'));
+  assert.match(header, /aria-label="Target folder"/);
+  assert.match(header, /aria-haspopup="dialog"/);
+  assert.match(dashboard, /Use this folder/);
+  assert.match(dashboard, /aria-label="Parent folder"/);
+  assert.match(dashboard, /<dialog[^>]*aria-labelledby="codex-folder-title"/);
+  assert.match(dashboard, /aria-label="Close folder picker"/);
+  assert.match(dashboard, />Cancel<\/button>/);
+  assert.doesNotMatch(chat, /Target folder|Use this folder|<dialog/);
   assert.doesNotMatch(chat, /id="codex-target-folder"|Absolute path or ~\/project/);
   assert.match(chat, /aria-label="Clear conversation"/);
   assert.match(chat, /lucide-eraser/);
   assert.doesNotMatch(chat, /lucide-trash/);
   assert.match(dashboard, /Loading catalog/);
   assert.doesNotMatch(dashboard, /No items match your filter/);
+});
+
+test("assistant pane stays below the topbar so its toggle remains usable", () => {
+  const dashboard = renderToStaticMarkup(<App />);
+  const chat = renderToStaticMarkup(<AiPane isOpen onClose={() => {}} items={INITIAL_ITEMS} onClearSubmittedPrompt={() => {}} onInventoryChanged={() => {}} />);
+  assert.match(dashboard, /<button[^>]*id="assistant-toggle"[^>]*aria-expanded="false"[^>]*aria-controls="assistant-pane"/);
+  assert.doesNotMatch(dashboard, /lg:mr-\[460px\]/);
+  assert.match(chat, /<aside[^>]*id="assistant-pane"[^>]*aria-labelledby="assistant-pane-title"/);
+  assert.match(chat, /id="assistant-pane-title"/);
+  const pane = /<aside[^>]*class="([^"]*)"/.exec(chat)?.[1] ?? "";
+  assert.doesNotMatch(pane, /\bfixed\b/);
+  assert.match(pane, /\babsolute\b.*\blg:relative\b.*\blg:w-\[460px\]/);
+  assert.match(chat, /<button[^>]*aria-label="Close assistant"/);
+  assert.match(chat, /<button[^>]*aria-label="Expand assistant"[^>]*aria-pressed="false"/);
+  const appSource = readFileSync(new URL("../frontend/src/App.tsx", import.meta.url), "utf8");
+  const chatSource = readFileSync(new URL("../frontend/src/components/AiPane.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(appSource, /lg:mr-\[460px\]/);
+  assert.match(appSource, /<div className="relative flex min-h-0[^\n]*>[\s\S]*<AiPane[\s\S]*?\/>\s*<\/div>/);
+  assert.doesNotMatch(appSource, /isAiPaneOpen\s*&&\s*(?:\(\s*)?<AiPane/);
+  assert.match(appSource, /setIsAiPaneOpen\(false\);\s*assistantToggle\.current\?\.focus\(\)/);
+  assert.match(chatSource, /event\.key === "Escape"/);
+  assert.match(appSource, /workspace=\{workspace\}/);
+  assert.match(chatSource, /\[workspace\]/);
+  assert.match(chatSource, /await runAgent\(\{ mode: "chat", message: query, history \}\)/);
+  assert.doesNotMatch(chatSource, /Approve and run on this machine/);
 });

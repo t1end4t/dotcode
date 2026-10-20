@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Search,
   SlidersHorizontal,
@@ -25,9 +25,14 @@ import {
   Check,
   Folder,
   Loader2,
+  FolderOpen,
+  ArrowUp,
+  Home,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import type { ManageableItem } from "./data/items";
-import { useCatalog } from "./useCatalog";
+import { readApiJson, useCatalog } from "./useCatalog";
 import { AiPane } from "./components/AiPane";
 import { CustomConfigModal } from "./components/CustomConfigModal";
 import { UpdateModal } from "./components/UpdateModal";
@@ -44,6 +49,55 @@ export default function App() {
   >("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [isAiPaneOpen, setIsAiPaneOpen] = useState(false);
+  const [workspace, setWorkspace] = useState("");
+  const [folders, setFolders] = useState<{ dir: string; parent: string; home: string; entries: string[] } | null>(null);
+  const [folderError, setFolderError] = useState("");
+  const [folderLoading, setFolderLoading] = useState(false);
+  const folderDialog = useRef<HTMLDialogElement>(null);
+  const folderButton = useRef<HTMLButtonElement>(null);
+  const [assistantBusy, setAssistantBusy] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        let saved = "";
+        try { saved = localStorage.getItem("dotcode_codex_workspace") || ""; } catch {}
+        const data = await readApiJson(await fetch("/api/workspace", { headers: saved ? { "x-dotcode-workspace": saved } : {} }));
+        if (!cancelled) {
+          setWorkspace(data.workspace);
+        }
+      } catch (error) {
+        if (!cancelled) setFolderError(error instanceof Error ? error.message : "Codex folder unavailable.");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const browseFolder = async (dir: string) => {
+    setFolderLoading(true);
+    setFolderError("");
+    try {
+      setFolders(await readApiJson(await fetch(`/api/folders?dir=${encodeURIComponent(dir)}`)));
+    } catch (error) {
+      setFolderError(error instanceof Error ? error.message : "Folders unavailable.");
+    } finally { setFolderLoading(false); }
+  };
+
+  const selectFolder = async () => {
+    if (assistantBusy || folderLoading || !folders) return;
+    setFolderLoading(true);
+    setFolderError("");
+    try {
+      const data = await readApiJson(await fetch("/api/workspace", { headers: { "x-dotcode-workspace": folders.dir } }));
+      localStorage.setItem("dotcode_codex_workspace", data.workspace);
+      setWorkspace(data.workspace);
+      folderDialog.current?.close();
+    } catch (error) {
+      setFolderError(error instanceof Error ? error.message : "Codex folder unavailable.");
+    } finally { setFolderLoading(false); }
+  };
+
+  const assistantToggle = useRef<HTMLButtonElement>(null);
   const [prefilledAiPrompt, setPrefilledAiPrompt] = useState<string | undefined>();
   const [submittedAiPrompt, setSubmittedAiPrompt] = useState<string | undefined>();
   const [editingItem, setEditingItem] = useState<ManageableItem | null>(null);
@@ -164,27 +218,62 @@ export default function App() {
           <Terminal aria-hidden="true" className="h-5 w-5 shrink-0 text-[var(--dc-accent)]" />
           <h1>DotCode</h1>
           <span className="workspace-version hidden sm:inline">LOCAL</span>
-          <span className="workspace-section hidden md:flex">
-            <Folder aria-hidden="true" className="h-3.5 w-3.5" />
-            {{ library: "Tool Library", services: "Services", models: "Models", agents: "Agent Setup" }[activeTab]}
-          </span>
         </div>
 
         {/* Right Header Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+            <button ref={folderButton} type="button" aria-label="Target folder" aria-haspopup="dialog" disabled={assistantBusy || folderLoading} title={workspace || "Choose Codex working folder"} onClick={() => {
+              folderDialog.current?.showModal();
+              void browseFolder(workspace || "~/");
+            }} className="rt-button max-w-[40vw] sm:max-w-80">
+                <FolderOpen aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{workspace.split("/").filter(Boolean).pop() || "Target folder"}</span>
+                <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+            </button>
           <button
+            ref={assistantToggle}
             type="button"
+            id="assistant-toggle"
+            aria-label={isAiPaneOpen ? "Close assistant" : "Open assistant"}
             aria-expanded={isAiPaneOpen}
+            aria-controls="assistant-pane"
             onClick={() => setIsAiPaneOpen(!isAiPaneOpen)}
             className="rt-button"
           >
-            <Sparkles className="h-3.5 w-3.5 text-[var(--dc-accent)]" />
-            <span>{isAiPaneOpen ? "Close assistant" : "Assistant"}</span>
+            <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-[var(--dc-accent)]" />
+            <span className="hidden sm:inline">{isAiPaneOpen ? "Close assistant" : "Assistant"}</span>
           </button>
         </div>
       </header>
+            <dialog ref={folderDialog} aria-labelledby="codex-folder-title" onClose={() => folderButton.current?.focus()} className="fixed inset-0 m-auto max-h-[85dvh] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-(--ctp-surface1) bg-(--ctp-mantle) p-4 text-(--ctp-text) shadow-2xl backdrop:bg-black/60">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 id="codex-folder-title" className="text-sm font-semibold">Choose target folder</h2>
+                  <button type="button" autoFocus aria-label="Close folder picker" onClick={() => folderDialog.current?.close()} className="rounded p-1 text-(--ctp-subtext0) hover:bg-(--ctp-surface0) focus-visible:ring-2 focus-visible:ring-(--ctp-lavender)"><X aria-hidden="true" className="h-4 w-4" /></button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" aria-label="Parent folder" disabled={folderLoading || !folders || folders.parent === folders.dir} onClick={() => folders && void browseFolder(folders.parent)} className="rounded p-1 text-(--ctp-subtext1) hover:bg-(--ctp-surface0) focus-visible:ring-2 focus-visible:ring-(--ctp-lavender) disabled:opacity-40"><ArrowUp aria-hidden="true" className="h-4 w-4" /></button>
+                  <button type="button" aria-label="Home folder" disabled={folderLoading} onClick={() => void browseFolder(folders?.home || "~/")} className="rounded p-1 text-(--ctp-subtext1) hover:bg-(--ctp-surface0) focus-visible:ring-2 focus-visible:ring-(--ctp-lavender) disabled:opacity-40"><Home aria-hidden="true" className="h-4 w-4" /></button>
+                  <p aria-live="polite" className="min-w-0 break-all font-mono text-[11px] text-(--ctp-subtext0)">{folders?.dir || workspace}</p>
+                </div>
+                <div aria-label="Subfolders" aria-busy={folderLoading} className="max-h-[40dvh] min-h-24 overflow-y-auto rounded border border-(--ctp-surface0) p-1">
+                  {folderLoading ? <p role="status" className="p-2 text-xs text-(--ctp-subtext0)">Loading folders...</p> : folders?.entries.map(name => (
+                    <button type="button" key={name} onClick={() => void browseFolder(`${folders.dir}/${name}`)} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-(--ctp-text) hover:bg-(--ctp-surface0) focus-visible:ring-2 focus-visible:ring-(--ctp-lavender)">
+                      <Folder aria-hidden="true" className="h-4 w-4 shrink-0 text-(--ctp-subtext0)" /><span className="break-all">{name}</span>
+                    </button>
+                  ))}
+                  {!folderLoading && folders?.entries.length === 0 && <p className="p-2 text-xs text-(--ctp-subtext0)">No subfolders</p>}
+                </div>
+                <p className="text-[11px] text-(--ctp-overlay2)">Changes only where Codex works. The saved catalog stays in DotCode data.</p>
+                {folderError && <p role="alert" className="break-words text-xs text-(--ctp-red)">{folderError}</p>}
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => folderDialog.current?.close()} className="rounded px-3 py-2 text-xs text-(--ctp-subtext1) hover:bg-(--ctp-surface0) focus-visible:ring-2 focus-visible:ring-(--ctp-lavender)">Cancel</button>
+                  <button type="button" onClick={() => void selectFolder()} disabled={assistantBusy || folderLoading || !folders || !!folderError} className="rounded bg-(--ctp-mauve) px-3 py-2 text-xs text-(--ctp-crust) focus-visible:ring-2 focus-visible:ring-(--ctp-lavender) disabled:opacity-50">Use this folder</button>
+                </div>
+              </div>
+            </dialog>
 
-      <div className={`flex min-h-0 min-w-0 flex-1 overflow-hidden transition-all duration-200 ${isAiPaneOpen ? "lg:mr-[460px]" : ""}`}>
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <nav aria-label="Dashboard sections" className="workspace-nav flex shrink-0 flex-col overflow-y-auto border-r">
           {([
             ["library", "Tool Library", Library],
@@ -650,19 +739,24 @@ export default function App() {
             </main>
           )}
         </div>
-      </div>
 
-      {/* AI Assistant Pane */}
-      <AiPane
-        isOpen={isAiPaneOpen}
-        onClose={() => setIsAiPaneOpen(false)}
-        items={items}
-        prefilledPrompt={prefilledAiPrompt}
-        submittedPrompt={submittedAiPrompt}
-        onClearSubmittedPrompt={() => setSubmittedAiPrompt(undefined)}
-        onClearPrefilledPrompt={() => setPrefilledAiPrompt(undefined)}
-        onInventoryChanged={refreshCatalog}
-      />
+        {/* AI Assistant Pane: in-flow on desktop, overlays the workspace below the topbar on smaller screens. */}
+        <AiPane
+          isOpen={isAiPaneOpen}
+          workspace={workspace}
+          onBusyChange={setAssistantBusy}
+          onClose={() => {
+            setIsAiPaneOpen(false);
+            assistantToggle.current?.focus();
+          }}
+          items={items}
+          prefilledPrompt={prefilledAiPrompt}
+          submittedPrompt={submittedAiPrompt}
+          onClearSubmittedPrompt={() => setSubmittedAiPrompt(undefined)}
+          onClearPrefilledPrompt={() => setPrefilledAiPrompt(undefined)}
+          onInventoryChanged={refreshCatalog}
+        />
+      </div>
 
       {/* Item Custom Configuration / Edit Modal */}
       {editingItem && (
