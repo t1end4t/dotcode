@@ -16,7 +16,7 @@ async function readMcpServers() {
 
 const TTL = 15 * 60 * 1000;
 const textFields = ['name', 'githubUrl', 'action', 'location', 'method', 'configurationNotes', 'version', 'installCommand', 'updateCommand', 'uninstallCommand', 'verificationCommand'];
-const actions = ['install', 'update', 'uninstall'];
+const actions = ['install', 'update', 'uninstall', 'register'];
 const catalogFields = ['id', 'name', 'repo', 'githubUrl', 'category', 'categoryLabel', 'description', 'primaryLanguage', 'defaultInstallCommand', 'customNotes', 'customCommand'];
 const catalogKey = url => url.replace(/\/$/, '').replace(/\.git$/, '').toLowerCase();
 
@@ -156,14 +156,18 @@ export function isLocalRequest(req) {
 
 export function validateResult(result, commands) {
   const script = command => {
-    const wrapped = /^(?:\S*\/)?(?:ba|z|k)?sh\s+-[lic]*c[lic]*\s+'([\s\S]*)'$/.exec(command);
-    return wrapped ? wrapped[1].replaceAll("'\\''", "'") : command;
+    const wrapped = /^(?:\S*\/)?(?:ba|z|k)?sh\s+-[lic]*c[lic]*\s+([\s\S]+)$/.exec(command);
+    // ponytail: accepts quoted segments, not expansions; add shell parsing if SDK logs other forms.
+    const word = wrapped?.[1].match(/^(?:'[^']*'|"(?:[^"\\$`]|\\[\\$`"\n])*"|\\[\s\S])+$/)?.[0];
+    return word ? word.replace(/'([^']*)'|"((?:[^"\\$`]|\\[\\$`"\n])*)"|\\([\s\S])/g,
+      (_, single, double, escaped) => single ?? double?.replace(/\\([\\$`"\n])/g, (_, char) => char === '\n' ? '' : char) ?? (escaped === '\n' ? '' : escaped)) : command;
   };
   if (!result || typeof result.reply !== 'string' || !Array.isArray(result.changes) || result.changes.length > 30) throw new Error('Invalid agent result. Inventory unchanged.');
   for (const change of result.changes) {
     if (!change || !textFields.every(field => typeof change[field] === 'string' && change[field].length <= 16000) ||
         !change.name.trim() || !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(change.githubUrl) ||
         !actions.includes(change.action) || !change.verificationCommand.trim() ||
+        (change.action === 'register' && (!path.isAbsolute(change.location) || !change.method.trim())) ||
         !commands.some(command => script(command.command) === script(change.verificationCommand) && command.exit_code === 0 && command.status === 'completed')) {
       throw new Error('Missing successful verification command. Inventory unchanged; inspect logs for partial changes.');
     }

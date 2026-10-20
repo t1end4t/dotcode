@@ -203,6 +203,68 @@ test('chat can add a new card while planning an approved install, then verify in
   }
 });
 
+test('chat registers an existing external installation only after approval and successful verification', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dotcode-register-'));
+  const directory = path.join(root, 'data');
+  const location = path.join(root, 'npm-global', 'lib', 'node_modules', 'tool');
+  await mkdir(location, { recursive: true });
+  const manifest = JSON.stringify({ name: 'tool', version: '1.0.0' });
+  await writeFile(path.join(location, 'package.json'), manifest);
+  const calls = [];
+  const verificationCommand = `cat '${path.join(location, 'package.json')}'`;
+  const change = { name: 'Tool', githubUrl: url, action: 'register', location, method: 'global npm (existing)', configurationNotes: 'Package verified; runtime health not checked.', version: '1.0.0', installCommand: '', updateCommand: '', uninstallCommand: '', verificationCommand };
+  let verification;
+  const app = express().use(express.json());
+  attachAgent(app, { directory, listMcpServers: async () => [], createCodex: () => ({ startThread(options) {
+    return { async runStreamed(prompt, { outputSchema }) {
+      calls.push({ options, prompt, outputSchema });
+      const execute = outputSchema.required.includes('changes');
+      return { events: (async function* () {
+        if (execute && verification) yield { type: 'item.completed', item: verification };
+        yield { type: 'item.completed', item: { id: 'm', type: 'agent_message', text: JSON.stringify(execute
+          ? { reply: 'Registered existing installation; runtime health not checked.', changes: [change] }
+          : { reply: `Verify ${location} read-only, then register it without reinstalling.`, canExecute: true, categories: [], catalogChanges: [] }) } };
+        yield { type: 'turn.completed', usage: null };
+      })() };
+    } };
+  } }) });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const inventory = async () => JSON.parse(await readFile(path.join(directory, 'inventory.json'), 'utf8'));
+    for (const status of ['missing', 'failed', 'completed']) {
+      verification = status === 'missing' ? undefined : { id: 'c', type: 'command_execution', command: verificationCommand, aggregated_output: manifest, exit_code: status === 'completed' ? 0 : 1, status };
+      const plan = await post(base, { mode: 'plan', message: 'Mark my existing global tool as installed. Do not reinstall it.' });
+      assert.ok(plan.planId);
+      assert.deepEqual((await inventory()).installations, []);
+      assert.equal(calls.at(-1).options.sandboxMode, 'read-only');
+      assert.match(calls.at(-1).prompt, /action.*register/i);
+      const result = await post(base, { mode: 'execute', planId: plan.planId });
+      assert.ok(calls.at(-1).outputSchema.properties.changes.items.properties.action.enum.includes('register'));
+      if (status !== 'completed') {
+        assert.equal(result.type, 'error');
+        assert.match(result.message, /verification/);
+        assert.deepEqual((await inventory()).installations, []);
+      } else {
+        assert.equal(result.type, 'result');
+        const [receipt] = (await inventory()).installations;
+        assert.equal(receipt.action, 'register');
+        assert.equal(receipt.installed, true);
+        assert.equal(receipt.location, location);
+        assert.equal(receipt.version, '1.0.0');
+        assert.equal(receipt.installCommand, '');
+        assert.equal(receipt.verificationCommand, verificationCommand);
+        assert.equal((await fetch(`${base}/api/inventory`).then(response => response.json())).installations[0].installed, true);
+      }
+      assert.equal(await readFile(path.join(location, 'package.json'), 'utf8'), manifest);
+    }
+  } finally {
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('Codex folder selection preserves the catalog, categories, and inventory while binding approvals to the sandbox', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'dotcode-folders-'));
   const directory = path.join(root, 'data');
@@ -362,7 +424,7 @@ test('enable and disable are excluded from the execution schema and rejected wit
       const failure = await post(base, { mode: 'execute', planId: plan.planId });
       assert.equal(failure.type, 'error');
       assert.match(failure.message, /verification/);
-      assert.deepEqual(schemas.at(-1).properties.action.enum, ['install', 'update', 'uninstall']);
+      assert.deepEqual(schemas.at(-1).properties.action.enum, ['install', 'update', 'uninstall', 'register']);
       assert.equal('enableCommand' in schemas.at(-1).properties, false);
       assert.equal('disableCommand' in schemas.at(-1).properties, false);
       const saved = JSON.parse(await readFile(path.join(directory, 'inventory.json'), 'utf8'));
@@ -429,6 +491,18 @@ test('unverified changes cannot update the inventory', () => {
   assert.equal(validateResult(result, [{ command: 'tool --version', exit_code: 0, status: 'completed' }]), result);
   assert.equal(validateResult(result, [{ command: "/run/current-system/sw/bin/bash -lc 'tool --version'", exit_code: 0, status: 'completed' }]), result);
   assert.throws(() => validateResult(result, [{ command: "bash -lc 'tool --version; echo unverified'", exit_code: 0, status: 'completed' }]), /verification/);
+  assert.equal(validateResult(result, [{ command: 'bash -lc "tool --version"', exit_code: 0, status: 'completed' }]), result);
+  const nodeCheck = { ...change, verificationCommand: "node <<'NODE'\nif (pkg.name !== 'tool') process.exit(1);\nNODE" };
+  const wrappedCommand = `/run/current-system/sw/bin/bash -lc "node <<'NODE'\nif (pkg.name "'!== '"'tool') process.exit(1);\nNODE"`;
+  assert.equal(validateResult({ ...result, changes: [nodeCheck] }, [{ command: wrappedCommand, exit_code: 0, status: 'completed' }]).changes[0], nodeCheck);
+  for (const command of ['bash -lc "tool --version; echo unverified"', 'bash -lc "tool --version"; echo unverified']) {
+    assert.throws(() => validateResult(result, [{ command, exit_code: 0, status: 'completed' }]), /verification/);
+  }
+  for (const verificationCommand of ['echo $HOME', 'echo $(tool --version)', 'echo `tool --version`']) {
+    assert.throws(() => validateResult({ ...result, changes: [{ ...change, verificationCommand }] }, [{ command: `bash -lc "${verificationCommand}"`, exit_code: 0, status: 'completed' }]), /verification/);
+  }
+  const quotedCheck = { ...change, verificationCommand: 'node -e "console.log(\'tool\')"' };
+  assert.equal(validateResult({ ...result, changes: [quotedCheck] }, [{ command: 'bash -lc "node -e \\"console.log(\'tool\')\\""', exit_code: 0, status: 'completed' }]).changes[0], quotedCheck);
 });
 
 test('SDK failure keeps inventory unchanged and saves failure logs', async () => {

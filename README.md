@@ -18,11 +18,13 @@ Chat manages cards as well as installed tools. Say **Add magnitudedev/magnitude*
 
 **Install**, **Update**, and **Uninstall** requests still require an approved installation plan and a successful verification command. An install request for a new repository can add its card while preparing the plan, but it does not mark the tool installed before verified execution. Adding a card does not install it. Removing a card does not uninstall its tool or erase its installation receipt, and inventory refresh does not recreate removed cards. Uninstalling keeps the card unless removal was also requested. The starter catalog in the application source is only a first-load fallback; chat never edits it or `untitled.md`.
 
+Say **Mark 9Router as installed** to register an existing installation, including a global npm package outside the workspace. Approve the read-only verification plan; after a successful check, DotCode saves a `register` inventory receipt and refreshes the installed card state. This does not reinstall, migrate, or modify the existing tool. The assistant checks package identity and installed artifacts and records the observed location/version. Installed state does not establish runtime health. Updates or removal outside the selected working folder still require manual steps or a separate migration plan.
+
 Planning and execution disable configured MCP servers because their external mutations are not constrained by a filesystem sandbox. Native web search remains available for documentation.
 
 Approval authorizes the whole plan, not each shell command. The SDK has no interactive approval UI here; blocked operations require manual steps, not relaxed sandboxing. Codex judges which verification is appropriate; matching a successful command is an execution receipt, not independent proof that the tool works. Failed/stopped turns may leave partial changes. Inspect before retrying. Logs can contain local paths and command output; keep the inventory private. Run only one DotCode server per machine. Chat catalog changes are validated as a batch and written with an atomic file replacement; the application does not provide a transaction across catalog and inventory files.
 
-The eraser button clears the visible chat. Chat keeps intermediate messages, tool steps, command output, and elapsed time in a collapsible section for each answer. The final answer appears separately. Planning requests include an explicit JSON schema. If the configured provider returns plain text instead, chat displays it without an approval button; execution still requires valid structured output and verified commands. The application does not override your configured model or provider.
+The eraser button clears the visible chat. Chat keeps intermediate messages, tool steps, command output, and elapsed time in a collapsible section for each answer. The final answer appears separately. Chat renders headings, lists, bold text, inline code, and fenced code blocks; long commands and code blocks scroll separately and never turn code URLs into links. Nested Markdown and tables are not supported. Planning requests include an explicit JSON schema. If the configured provider returns plain text instead, chat displays it without an approval button; execution still requires valid structured output and verified commands. The application does not override your configured model or provider.
 
 The composer highlights HTTP(S) URLs while typing. Sent messages and replies show clickable URLs with GitHub or globe icons; links open in a new tab. Highlighting does not change the submitted text.
 
@@ -35,7 +37,7 @@ npm install
 npm run dev
 ```
 
-Open <http://127.0.0.1:3000>.
+The development server opens <http://127.0.0.1:3000> in your default browser automatically. Set `BROWSER=none` to disable this, for example `BROWSER=none npm run dev`.
 
 ## Scripts
 

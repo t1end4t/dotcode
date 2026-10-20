@@ -39,6 +39,31 @@ test("Markdown links show the raw URL instead of label or syntax", () => {
   assert.equal(renderToStaticMarkup(<>{renderChatText("[label](https://example.com)", false)}</>).replace(/<[^>]+>/g, ""), "[label](https://example.com)");
 });
 
+test("chat answers render common Markdown without linking code", () => {
+  const html = renderToStaticMarkup(<>{renderChatText("## Found\n- **Location:** `/tmp/tool`\n- Source: https://github.com/example/tool\n\n1. Approve\n2. Run `node -e 'https://github.com/example/tool'`\n\n```js\nconst url = \"https://github.com/example/tool\";\n```", true)}</>);
+  assert.match(html, /<h3[^>]*>Found<\/h3>/);
+  assert.match(html, /<ul[^>]*><li[^>]*><strong[^>]*>Location:<\/strong> <code[^>]*>\/tmp\/tool<\/code><\/li>/);
+  assert.match(html, /<ol[^>]*><li[^>]*>Approve<\/li><li[^>]*>Run <code[^>]*>node -e &#x27;https:\/\/github.com\/example\/tool&#x27;<\/code><\/li><\/ol>/);
+  assert.match(html, /<pre[^>]*><code[^>]*>const url = &quot;https:\/\/github.com\/example\/tool&quot;;<\/code><\/pre>/);
+  assert.equal((html.match(/<a /g) || []).length, 1);
+  assert.doesNotMatch(html, /```|\*\*|## /);
+});
+
+test("long inline commands scroll separately instead of wrapping through the answer", () => {
+  const command = `node -e 'const url = "https://github.com/example/tool"; ${"verify();".repeat(30)}'`;
+  const html = renderToStaticMarkup(<>{renderChatText(`After approval:\n\`${command}\``, true)}</>);
+  assert.match(html, /<code[^>]*tabindex="0"[^>]*class="[^"]*overflow-auto[^"]*whitespace-pre/);
+  assert.doesNotMatch(html, /<a /);
+  assert.match(html, /verify\(\);verify\(\);/);
+});
+
+test("code blocks preserve indentation, escape HTML, and tolerate an unfinished fence", () => {
+  const html = renderToStaticMarkup(<>{renderChatText('```html\n<script>bad()</script>\n  <a href="javascript:bad()">bad</a>', true)}</>);
+  assert.match(html, /<pre[^>]*tabindex="0"/);
+  assert.ok(html.includes('&lt;script&gt;bad()&lt;/script&gt;\n  &lt;a href=&quot;javascript:bad()&quot;&gt;bad&lt;/a&gt;'));
+  assert.doesNotMatch(html, /<script|<a /);
+});
+
 test("dashboard, chat, and item settings omit activation controls and status", () => {
   const item = { ...INITIAL_ITEMS[0], installed: true, receipt: {
     name: "Tool", githubUrl: INITIAL_ITEMS[0].githubUrl, installed: true, enabled: true,

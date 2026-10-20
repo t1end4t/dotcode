@@ -6,6 +6,7 @@ import { attachAgent, isLocalRequest } from "./agent.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
+let vite: import("vite").ViteDevServer | undefined;
 
 app.use("/api", (req, res, next) => {
   if (!isLocalRequest(req)) return res.status(403).json({ error: "Local, same-origin requests only." });
@@ -19,7 +20,7 @@ app.use("/api", (_req, res) => res.status(404).json({ error: "Unknown API endpoi
 
 if (process.env.NODE_ENV !== "production") {
   const { createServer } = await import("vite");
-  const vite = await createServer({
+  vite = await createServer({
     server: { middlewareMode: true, host: "127.0.0.1", proxy: {} },
     appType: "spa",
     root: path.resolve(__dirname, "frontend"),
@@ -31,5 +32,14 @@ if (process.env.NODE_ENV !== "production") {
   app.get("*", (_req, res) => res.sendFile(path.resolve(distPath, "index.html")));
 }
 
-const server = app.listen(port, "127.0.0.1", () => console.log(`DotCode: http://127.0.0.1:${port}`));
+const server = app.listen(port, "127.0.0.1", () => {
+  const address = server.address();
+  if (!address || typeof address === "string") return;
+  const url = `http://127.0.0.1:${address.port}`;
+  console.log(`DotCode: ${url}`);
+  if (vite) {
+    vite.resolvedUrls = { local: [url], network: [] };
+    vite.openBrowser();
+  }
+});
 for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { stopAgent(); server.close(); });

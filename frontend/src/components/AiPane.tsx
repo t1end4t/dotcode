@@ -28,17 +28,71 @@ import { readApiJson } from "../useCatalog";
 const urlPattern = /(https?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]])/gi;
 const chatLinkPattern = /(\[[^\]\n]+\]\(https?:\/\/[^\s<>"'`)]+\)|https?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]])/gi;
 
-export const renderChatText = (text: string, linked: boolean) => text.split(linked ? chatLinkPattern : urlPattern).map((part, index) => {
+const renderLinks = (text: string, linked: boolean, keyPrefix = "") => text.split(linked ? chatLinkPattern : urlPattern).map((part, index) => {
   if (index % 2 === 0) return part;
-  if (!linked) return <span key={index} className="text-sky-300">{part}</span>;
+  if (!linked) return <span key={`${keyPrefix}${index}`} className="text-sky-300">{part}</span>;
   const markdown = /^\[([^\]\n]+)\]\((https?:\/\/[^\s<>"'`)]+)\)$/i.exec(part);
   const href = markdown?.[2] ?? part;
   return (
-    <a key={index} href={href} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] rounded-sm bg-slate-950/40 px-0.5 text-sky-300 underline decoration-sky-300/50 underline-offset-2 hover:bg-slate-950/60 focus-visible:outline-2 focus-visible:outline-sky-300">
+    <a key={`${keyPrefix}${index}`} href={href} target="_blank" rel="noopener noreferrer" className="[overflow-wrap:anywhere] rounded-sm bg-slate-950/40 px-0.5 text-sky-300 underline decoration-sky-300/50 underline-offset-2 hover:bg-slate-950/60 focus-visible:outline-2 focus-visible:outline-sky-300">
       {/^https?:\/\/github\.com(?:[/?#]|$)/i.test(href) ? <Github aria-hidden="true" className="mr-1 inline h-3 w-3" /> : <Globe aria-hidden="true" className="mr-1 inline h-3 w-3" />}{href}
     </a>
   );
 });
+
+const renderInline = (text: string, key: string) => text.split(/(`[^`\n]+`|\*\*[^*\n]+\*\*)/g).map((part, index) => {
+  if (index % 2 === 0) return renderLinks(part, true, `${key}-${index}-`);
+  if (part.startsWith("`")) {
+    const code = part.slice(1, -1);
+    return <code key={`${key}-${index}`} tabIndex={code.length > 120 ? 0 : undefined} className={code.length > 120
+      ? "my-2 block max-h-64 max-w-full overflow-auto whitespace-pre rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-[11px] leading-5 text-amber-200 focus-visible:outline-2 focus-visible:outline-sky-300"
+      : "rounded bg-slate-950/70 px-1 py-0.5 font-mono text-[0.92em] text-amber-200 [overflow-wrap:anywhere]"}>{code}</code>;
+  }
+  return <strong key={`${key}-${index}`} className="font-semibold text-slate-50">{renderLinks(part.slice(2, -2), true, `${key}-${index}-`)}</strong>;
+});
+
+// ponytail: chat Markdown subset; use a parser when tables, nesting, or HTML-like Markdown are needed.
+const renderMarkdown = (text: string) => {
+  const lines = text.split(/\r?\n/);
+  const blocks: React.ReactNode[] = [];
+  const isList = (line: string) => /^\s*(?:[-*+]|\d+[.)])\s+/.test(line);
+  const isBlock = (line: string) => /^\s*```/.test(line) || /^#{1,6}\s+/.test(line) || isList(line);
+  for (let index = 0; index < lines.length;) {
+    const line = lines[index];
+    if (!line.trim()) { index++; continue; }
+    if (/^\s*```/.test(line)) {
+      const code = [];
+      for (index++; index < lines.length && !/^\s*```\s*$/.test(lines[index]); index++) code.push(lines[index]);
+      index++;
+      blocks.push(<pre key={blocks.length} tabIndex={0} aria-label="Code block" className="max-h-72 max-w-full overflow-auto rounded-lg border border-slate-700 bg-slate-950 p-3 text-[11px] leading-5 text-slate-200 focus-visible:outline-2 focus-visible:outline-sky-300"><code className="whitespace-pre font-mono">{code.join("\n")}</code></pre>);
+      continue;
+    }
+    const heading = /^#{1,6}\s+(.+)$/.exec(line);
+    if (heading) {
+      blocks.push(<h3 key={blocks.length} className="text-[13px] font-semibold text-slate-50">{renderInline(heading[1], `h${blocks.length}`)}</h3>);
+      index++;
+      continue;
+    }
+    const ordered = /^\s*\d+[.)]\s+/.test(line);
+    if (isList(line)) {
+      const items: string[] = [];
+      while (index < lines.length && ((isList(lines[index]) && /^\s*\d+[.)]\s+/.test(lines[index]) === ordered) || (items.length > 0 && !isList(lines[index]) && /^\s{2,}\S/.test(lines[index])))) {
+        if (isList(lines[index])) items.push(lines[index].replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ""));
+        else items[items.length - 1] += `\n${lines[index].trim()}`;
+        index++;
+      }
+      const List = ordered ? "ol" : "ul";
+      blocks.push(<List key={blocks.length} className={`${ordered ? "list-decimal" : "list-disc"} space-y-1 pl-5 marker:text-slate-500`}>{items.map((item, itemIndex) => <li key={itemIndex} className="whitespace-pre-wrap pl-0.5">{renderInline(item, `l${blocks.length}-${itemIndex}`)}</li>)}</List>);
+      continue;
+    }
+    const paragraph = [];
+    while (index < lines.length && lines[index].trim() && (!paragraph.length || !isBlock(lines[index]))) paragraph.push(lines[index++]);
+    blocks.push(<p key={blocks.length} className="whitespace-pre-wrap">{renderInline(paragraph.join("\n"), `p${blocks.length}`)}</p>);
+  }
+  return blocks;
+};
+
+export const renderChatText = (text: string, linked: boolean) => linked ? renderMarkdown(text) : renderLinks(text, false);
 
 interface Message {
   id: string;
@@ -446,14 +500,14 @@ export const AiPane: React.FC<AiPaneProps> = ({
             )}
 
             <div
-              className={`relative group max-w-[92%] rounded-xl px-3.5 py-2.5 text-xs sm:text-[13px] leading-relaxed shadow-sm ${
+              className={`relative group min-w-0 max-w-[92%] rounded-xl px-3.5 py-2.5 text-xs sm:text-[13px] leading-relaxed shadow-sm ${
                 msg.role === "user"
                   ? "bg-indigo-600 text-white rounded-tr-none"
                   : "bg-slate-800/90 border border-slate-700/60 text-slate-200 rounded-tl-none"
               }`}
             >
               {msg.duration && <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-400">{msg.text.startsWith("Error:") ? "Error" : "Final answer"}</div>}
-              <div className="prose prose-invert prose-xs max-w-none break-words whitespace-pre-wrap">
+              <div className="min-w-0 space-y-2 break-words">
                 {renderChatText(msg.text, true)}
               </div>
               {msg.planId && (
