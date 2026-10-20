@@ -6,6 +6,7 @@
     "dev": "tsx watch server.ts",
     "build": "npm run build -w frontend",
     "start": "NODE_ENV=production tsx server.ts",
+    "lint": "tsc --noEmit -p frontend/tsconfig.json",
     "test": "node --import tsx --test tests/*.test.*",
     "test:watch": "node --import tsx --test --watch tests/*.test.*"
   },

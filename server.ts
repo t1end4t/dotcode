@@ -21,7 +21,7 @@ app.use("/api", (_req, res) => res.status(404).json({ error: "Unknown API endpoi
 if (process.env.NODE_ENV !== "production") {
   const { createServer } = await import("vite");
   vite = await createServer({
-    server: { middlewareMode: true, host: "127.0.0.1", proxy: {} },
+    server: { middlewareMode: true, host: "0.0.0.0", proxy: {} },
     appType: "spa",
     root: path.resolve(__dirname, "frontend"),
   });
@@ -32,7 +32,8 @@ if (process.env.NODE_ENV !== "production") {
   app.get("*", (_req, res) => res.sendFile(path.resolve(distPath, "index.html")));
 }
 
-const server = app.listen(port, "127.0.0.1", () => {
+const host = process.env.HOST ?? "0.0.0.0";
+const server = app.listen(port, host, () => {
   const address = server.address();
   if (!address || typeof address === "string") return;
   const url = `http://127.0.0.1:${address.port}`;

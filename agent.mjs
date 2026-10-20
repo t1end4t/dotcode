@@ -147,11 +147,21 @@ const schema = {
 };
 
 export function isLocalRequest(req) {
-  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress)) return false;
+  const isCloud = Boolean(process.env.APP_URL || process.env.K_SERVICE);
+  const ip = req.socket?.remoteAddress;
+  const isLocalIp = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip) ||
+    (isCloud && (ip?.startsWith('10.') || ip?.startsWith('172.') || ip?.startsWith('169.254.') || ip?.startsWith('::ffff:10.') || ip?.startsWith('::ffff:172.')));
+  if (!isLocalIp) return false;
   try {
     const host = new URL(`http://${req.headers.host}`);
-    return ['localhost', '127.0.0.1', '[::1]'].includes(host.hostname) &&
-      (!req.headers.origin || req.headers.origin === host.origin) && req.headers['sec-fetch-site'] !== 'cross-site';
+    const isAllowedHost = ['localhost', '127.0.0.1', '[::1]'].includes(host.hostname) ||
+      (isCloud && (host.hostname.endsWith('.run.app') || (process.env.APP_URL && new URL(process.env.APP_URL).hostname === host.hostname)));
+    if (!isAllowedHost) return false;
+    if (req.headers.origin) {
+      const origin = new URL(req.headers.origin);
+      if (origin.origin !== host.origin && origin.hostname !== host.hostname) return false;
+    }
+    return req.headers['sec-fetch-site'] !== 'cross-site';
   } catch { return false; }
 }
 
