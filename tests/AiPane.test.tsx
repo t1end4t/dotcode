@@ -99,10 +99,9 @@ test("card details display metadata without manual editing or removal controls",
 });
 
 test("Codex folder selector and eraser clear-chat control belong in chat, not the dashboard", () => {
-  const html = renderToStaticMarkup(<App />);
-  assert.doesNotMatch(html, /Check Updates|Add Item|Export Script|Quick actions|Install from GitHub|Prepare scripts only/);
-  const dashboard = html.slice(0, html.indexOf('<aside'));
-  const chat = html.slice(html.indexOf('<aside'));
+  const dashboard = renderToStaticMarkup(<App />);
+  const chat = renderToStaticMarkup(<AiPane isOpen onClose={() => {}} items={INITIAL_ITEMS} onClearSubmittedPrompt={() => {}} onInventoryChanged={() => {}} />);
+  assert.doesNotMatch(dashboard + chat, /Check Updates|Add Item|Export Script|Quick actions|Install from GitHub|Prepare scripts only/);
   assert.doesNotMatch(dashboard, /Target folder|Use folder/);
   assert.match(chat, /Target folder/);
   assert.match(chat, /Use this folder/);

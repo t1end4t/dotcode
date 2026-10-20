@@ -6,6 +6,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { createRuntime } from './runtime.mjs';
 
 async function readMcpServers() {
   const { stdout } = await promisify(execFile)('codex', ['mcp', 'list', '--json'], { timeout: 10000 });
@@ -180,6 +181,7 @@ export function attachAgent(app, {
   createCodex = options => new Codex({ codexPathOverride: 'codex', ...options }),
   listMcpServers = readMcpServers,
   fetchRelease = globalThis.fetch,
+  runtimeOptions = {},
 } = {}) {
   directory = path.resolve(directory);
   const appDirectory = fileURLToPath(new URL('.', import.meta.url));
@@ -191,6 +193,7 @@ export function attachAgent(app, {
   };
   checkDirectory(directory);
   const plans = new Map();
+  const runtime = createRuntime({ ...runtimeOptions, directory });
   const controllers = new Set();
   let busy = false;
   let initializingCatalog = false;
@@ -249,6 +252,36 @@ export function attachAgent(app, {
     checkDirectory(target);
     return target;
   };
+
+  app.get('/api/runtime', async (_req, res) => {
+    res.setHeader('cache-control', 'no-store');
+    try { await prepare(); res.json(await runtime.snapshot()); }
+    catch (error) { res.status(400).json({ error: error.message }); }
+  });
+
+  app.get('/api/runtime/logs', async (req, res) => {
+    res.setHeader('cache-control', 'no-store');
+    try {
+      await prepare();
+      if (typeof req.query.id !== 'string') throw new Error('Service ID required.');
+      res.json({ logs: await runtime.logs(req.query.id) });
+    } catch (error) { res.status(400).json({ error: error.message }); }
+  });
+
+  app.post('/api/runtime/plan', async (req, res) => {
+    if (busy || initializingCatalog) return res.status(409).json({ error: 'Another task is running. Wait for it to finish.' });
+    try { await prepare(); res.json(await runtime.plan(req.body)); }
+    catch (error) { res.status(400).json({ error: error.message }); }
+  });
+
+  app.post('/api/runtime/execute', async (req, res) => {
+    if (busy || initializingCatalog) return res.status(409).json({ error: 'Another task is running. Wait for it to finish.' });
+    if (typeof req.body?.planId !== 'string') return res.status(400).json({ error: 'An approved plan ID is required.' });
+    busy = true;
+    try { await prepare(); res.json(await runtime.execute(req.body.planId)); }
+    catch (error) { res.status(400).json({ error: error.message }); }
+    finally { busy = false; }
+  });
 
   app.get('/api/workspace', async (req, res) => {
     try {
@@ -457,5 +490,5 @@ export function attachAgent(app, {
       res.end();
     }
   });
-  return () => { for (const controller of controllers) controller.abort(); };
+  return async () => { for (const controller of controllers) controller.abort(); await runtime.close(); };
 }

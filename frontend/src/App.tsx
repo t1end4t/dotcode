@@ -23,15 +23,18 @@ import {
   ArrowUpCircle,
   GitCommit,
   Check,
+  Folder,
 } from "lucide-react";
 import type { ManageableItem } from "./data/items";
 import { useCatalog } from "./useCatalog";
 import { AiPane } from "./components/AiPane";
 import { CustomConfigModal } from "./components/CustomConfigModal";
 import { UpdateModal } from "./components/UpdateModal";
+import { RuntimePane } from "./components/RuntimePane";
 
 export default function App() {
   const { items, inventoryError, catalogLoaded, refreshCatalog, checkUpdates } = useCatalog();
+  const [activeTab, setActiveTab] = useState<"library" | "services" | "models" | "agents">("library");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -39,7 +42,7 @@ export default function App() {
     "all" | "installed" | "updates" | "available"
   >("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [isAiPaneOpen, setIsAiPaneOpen] = useState(true);
+  const [isAiPaneOpen, setIsAiPaneOpen] = useState(false);
   const [prefilledAiPrompt, setPrefilledAiPrompt] = useState<string | undefined>();
   const [submittedAiPrompt, setSubmittedAiPrompt] = useState<string | undefined>();
   const [editingItem, setEditingItem] = useState<ManageableItem | null>(null);
@@ -154,34 +157,19 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-950 font-sans text-slate-100">
-      {/* Main Content Area */}
-      <div className={`flex flex-1 flex-col overflow-hidden transition-all duration-200 ${isAiPaneOpen ? "lg:mr-[460px]" : ""}`}>
-        {/* Top Navbar */}
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800/80 bg-slate-900/60 px-6 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 shadow-md shadow-indigo-500/20 text-white font-bold text-sm tracking-wider">
-              DC
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-bold tracking-tight text-slate-100">DotCode Hub</h1>
-                <span className="text-[11px] text-slate-500 font-mono">v1.2</span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Curated Developer Tools, Desktop Apps & Engineering Resources
-              </p>
-            </div>
-          </div>
+    <div className="dotcode-shell flex h-dvh w-full flex-col overflow-hidden">
+        <header className="workspace-topbar flex shrink-0 items-center justify-between gap-3">
+          <div className="workspace-breadcrumb"><Terminal aria-hidden="true" className="h-5 w-5 shrink-0" /><h1>DotCode</h1><span className="workspace-version hidden sm:inline">LOCAL</span><span className="workspace-section hidden md:flex"><Folder aria-hidden="true" className="h-3.5 w-3.5" />{{ library: "Tool Library", services: "Services", models: "Models", agents: "Agent Setup" }[activeTab]}</span></div>
 
           {/* Search Bar */}
-          <div className="hidden sm:flex items-center relative w-64 lg:w-80">
+          <div className={`${activeTab === "library" ? "hidden sm:flex" : "hidden"} min-w-0 flex-1 max-w-80 items-center relative`}>
             <Search className="absolute left-3 h-4 w-4 text-slate-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search 39 tools, apps, courses, tags..."
+              aria-label="Search tool library"
               className="w-full rounded-xl border border-slate-800 bg-slate-950/80 pl-9 pr-8 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
             />
             {searchQuery && (
@@ -198,21 +186,29 @@ export default function App() {
           <div className="flex items-center gap-2">
             {/* AI Pane Toggle Button */}
             <button
+              type="button"
+              aria-expanded={isAiPaneOpen}
               onClick={() => setIsAiPaneOpen(!isAiPaneOpen)}
-              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition-all shadow-sm ${
-                isAiPaneOpen
-                  ? "bg-indigo-600 text-white shadow-indigo-500/20"
-                  : "border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20"
-              }`}
+              className="rt-button"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              <span>{isAiPaneOpen ? "Close Copilot" : "AI Copilot"}</span>
-              <span className="hidden md:inline text-[10px] bg-black/20 px-1 rounded font-mono">
-                Codex
-              </span>
+              <span>{isAiPaneOpen ? "Close assistant" : "Assistant"}</span>
             </button>
           </div>
         </header>
+
+      <div className={`flex min-h-0 min-w-0 flex-1 overflow-hidden transition-all duration-200 ${isAiPaneOpen ? "lg:mr-[460px]" : ""}`}>
+        <nav aria-label="Dashboard sections" className="workspace-nav flex shrink-0 flex-col overflow-y-auto border-r">
+          {([
+            ["library", "Tool Library", Library],
+            ["services", "Services", Terminal],
+            ["models", "Models", Cpu],
+            ["agents", "Agent Setup", Wrench],
+          ] as const).map(([id, label, Icon]) => <button key={id} type="button" aria-label={label} title={label} aria-current={activeTab === id ? "page" : undefined} onClick={() => setActiveTab(id)} className="workspace-nav-item"><Icon aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="sr-only">{label}</span></button>)}
+        </nav>
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+
+        {activeTab !== "library" ? <RuntimePane tab={activeTab} /> : <>
 
         {inventoryError && <p role="alert" className="px-6 py-2 text-sm text-rose-300">{inventoryError}</p>}
         {/* Filter and Metrics Toolbar */}
@@ -632,6 +628,8 @@ export default function App() {
             </div>
           )}
         </main>
+        </>}
+        </div>
       </div>
 
       {/* AI Pane on the right */}

@@ -42,4 +42,7 @@ const server = app.listen(port, "127.0.0.1", () => {
     vite.openBrowser();
   }
 });
-for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { stopAgent(); server.close(); });
+for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => {
+  server.close();
+  void stopAgent().finally(() => vite?.close());
+});

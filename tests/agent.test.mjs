@@ -8,6 +8,32 @@ import { attachAgent, isLocalRequest, validateResult } from '../agent.mjs';
 
 const url = 'https://github.com/example/tool';
 
+test('runtime API exposes plans without mutation and executes only approved plan IDs', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-runtime-api-'));
+  const home = path.join(directory, 'home');
+  await mkdir(home);
+  const calls = [];
+  const app = express().use(express.json());
+  const stop = attachAgent(app, { directory: path.join(directory, 'data'), createCodex: fakeCodex([]), listMcpServers: async () => [], runtimeOptions: { home, run: async (...args) => { calls.push(args); return { stdout: 'LoadState=loaded\nActiveState=inactive\nUnitFileState=disabled\n' }; } } });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const post = (route, body) => fetch(`${base}${route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const plan = await (await post('/api/runtime/plan', { kind: 'agent', category: 'skill', agent: 'codex', name: 'review', description: 'Review', content: 'Review carefully.' })).json();
+    await assert.rejects(readFile(path.join(directory, 'data/workspace/.agents/skills/review/SKILL.md')), { code: 'ENOENT' });
+    assert.equal((await post('/api/runtime/execute', {})).status, 400);
+    assert.equal((await post('/api/runtime/execute', { planId: plan.id })).status, 200);
+    assert.match(await readFile(path.join(directory, 'data/workspace/.agents/skills/review/SKILL.md'), 'utf8'), /Review carefully/);
+    assert.equal((await post('/api/runtime/execute', { planId: plan.id })).status, 400);
+    assert.equal(calls.length, 0);
+  } finally {
+    server.close();
+    await stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('inventory discovers CLI-created Nix profiles without executing tools or writing receipts', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-discovery-'));
   const profile = path.join(directory, 'workspace', 'apps', 'tool', 'profile');
