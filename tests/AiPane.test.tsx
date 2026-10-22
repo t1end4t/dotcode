@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import App from "../frontend/src/App";
-import { AiPane, formatToolCommand, renderChatText, ToolSteps } from "../frontend/src/components/AiPane";
+import { AiPane, formatToolCommand, imageAttachmentError, renderChatText, ToolSteps } from "../frontend/src/components/AiPane";
 import { CustomConfigModal } from "../frontend/src/components/CustomConfigModal";
 import { INITIAL_ITEMS } from "../frontend/src/data/items";
 
@@ -169,6 +169,17 @@ test("the target folder picker belongs in the app header; chat keeps clear conve
   assert.doesNotMatch(dashboard, /No items match your filter/);
 });
 
+test("chat composer can attach images by keyboard", () => {
+  const chat = renderToStaticMarkup(<AiPane isOpen onClose={() => {}} items={INITIAL_ITEMS} onClearSubmittedPrompt={() => {}} onInventoryChanged={() => {}} />);
+  assert.match(chat, /<input[^>]*type="file"[^>]*accept="image\/png,image\/jpeg,image\/webp"[^>]*multiple/);
+  assert.match(chat, /<button[^>]*aria-label="Attach images"/);
+  const png = { type: "image/png", size: 1 };
+  assert.equal(imageAttachmentError([png], 3), "");
+  assert.match(imageAttachmentError([png, png], 3), /up to 4/);
+  assert.match(imageAttachmentError([{ type: "image/svg+xml", size: 1 }], 0), /PNG, JPEG, or WebP/);
+  assert.match(imageAttachmentError([{ type: "image/png", size: 5 * 1024 * 1024 + 1 }], 0), /5 MiB/);
+});
+
 test("assistant pane stays below the topbar so its toggle remains usable", () => {
   const dashboard = renderToStaticMarkup(<App />);
   const chat = renderToStaticMarkup(<AiPane isOpen onClose={() => {}} items={INITIAL_ITEMS} onClearSubmittedPrompt={() => {}} onInventoryChanged={() => {}} />);
@@ -190,6 +201,6 @@ test("assistant pane stays below the topbar so its toggle remains usable", () =>
   assert.match(chatSource, /event\.key === "Escape"/);
   assert.match(appSource, /workspace=\{workspace\}/);
   assert.match(chatSource, /\[workspace\]/);
-  assert.match(chatSource, /await runAgent\(\{ mode: "chat", message: query, history \}\)/);
+  assert.match(chatSource, /await runAgent\(\{ mode: "chat", message: query, images: sentImages, history \}\)/);
   assert.doesNotMatch(chatSource, /Approve and run on this machine/);
 });

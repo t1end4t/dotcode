@@ -15,6 +15,7 @@ app.use("/api", (req, res, next) => {
   if (req.method !== "GET" && !req.is("application/json")) return res.status(415).json({ error: "JSON required." });
   next();
 });
+app.use("/api/ai/chat", express.json({ limit: "28mb" }));
 app.use(express.json({ limit: "512kb" }));
 app.get("/api/health", (_req, res) => res.json({ ok: true, agent: "codex" }));
 const stopAgent = attachAgent(app);

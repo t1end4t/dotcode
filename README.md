@@ -35,6 +35,8 @@ Service management requires Linux with user-level systemd. Local model inference
 
 Open the assistant from the header. Drag a tool card into chat to include its GitHub link, or use **Ask AI**.
 
+Dropped tools appear as removable attachment cards. Drop, paste, or use **Attach images** to add PNG, JPEG, or WebP images (up to four per message, 5 MiB each). Images can be sent without text. They are included in that turn only; attach them again if a later message needs them. Image previews remain in the open conversation but are not saved across reloads. The server stages private image files under `DOTCODE_HOME` and removes them after the turn. Your configured Codex model must support image input.
+
 Try requests such as:
 
 ```text
@@ -52,14 +54,15 @@ Use **Organize with AI** to group your library into categories.
 - Desktop launcher changes require separate approval. Runtime buttons and form submissions authorize their exact actions.
 - Adding or removing a card does not install or uninstall its tool.
 - Installed status requires a verified command or supported disk discovery; it does not guarantee that a tool runs correctly.
+- The assistant is instructed to save `install.sh`, `update.sh`, `uninstall.sh`, and `verify.sh` under the selected target folder's `apps/<id>/`. Later operations reuse these scripts after inspection. Existing apps gain missing scripts during an authorized install or update; scripts are not created retroactively. Nix profile discovery exposes saved script paths, but does not verify their contents or execute them.
 - Failed or stopped operations can leave partial changes. Inspect them before retrying.
 
 ## Your Workspace
 
-DotCode keeps managed data outside this repository, under `~/codebases/dotcode-workspace` by default:
+DotCode keeps managed data outside this repository, under `~/.dotcode` by default:
 
 ```text
-dotcode-workspace/
+.dotcode/
   workspace/       Tool sources and installation artifacts
   catalog.json     Your library, notes, and tags
   inventory.json   Installation records and run logs
@@ -67,7 +70,10 @@ dotcode-workspace/
   models/          Local model files
 ```
 
+This directory holds machine-local data, not application source. Keep it out of Git.
+
 - Set `DOTCODE_HOME` to use another data directory. Existing data is not moved automatically.
+- When migrating an older data directory, retain a symlink at its old location until stored installation paths and service references have been updated.
 - Use **Target folder** in the header to choose where the assistant works. This does not move your library or installations.
 - Keep one DotCode server running per machine. Logs may contain local paths and command output.
 
@@ -79,7 +85,7 @@ Set environment variables when starting the server. See `.env.example` for basic
 | --- | --- | --- |
 | `HOST` | `0.0.0.0` | Bind address; use `127.0.0.1` for local-only listening. |
 | `PORT` | `3000` | HTTP port. |
-| `DOTCODE_HOME` | `~/codebases/dotcode-workspace` | Managed data directory. |
+| `DOTCODE_HOME` | `~/.dotcode` | Managed data directory. |
 | `BROWSER` | Default browser | Set to `none` to skip opening the browser in development. |
 | `GITHUB_TOKEN` | Unset | Optional token for higher GitHub API limits. |
 

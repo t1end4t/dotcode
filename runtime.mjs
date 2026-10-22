@@ -66,7 +66,7 @@ function agentEntry(body) {
 }
 
 export function createRuntime({ directory, home = homedir(), run = promisify(execFile), spawnProcess = spawn, fetchRemote = globalThis.fetch, now = Date.now } = {}) {
-  directory = path.resolve(directory ?? process.env.DOTCODE_HOME ?? path.join(home, 'codebases/dotcode-workspace'));
+  directory = path.resolve(directory ?? process.env.DOTCODE_HOME ?? path.join(home, '.dotcode'));
   const protectedRoots = [fileURLToPath(new URL('.', import.meta.url)).replace(/\/$/, ''), path.join(home, 'nix-dev/nixos-conf')];
   if (directory === home || directory === path.parse(directory).root || protectedRoots.some(root => contains(root, directory) || contains(directory, root))) throw new Error('Runtime data must be separate from application source, home and NixOS configuration.');
   const pending = new Map();

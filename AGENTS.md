@@ -20,7 +20,7 @@
 
 - Keep API access local and same-origin. Never weaken approval gates, sandboxing, path isolation, or boundary validation.
 - Planning is read-only. Execution uses an approved plan. Do not infer installation success from catalog metadata or a source checkout.
-- Keep managed tools and user data under `DOTCODE_HOME` (default `~/codebases/dotcode-workspace`), separate from application source and NixOS/Home Manager configuration.
+- Keep managed tools and user data under `DOTCODE_HOME` (default `~/.dotcode`), separate from application source and NixOS/Home Manager configuration.
 - Tests must use temporary directories and mocks. Do not invoke real installations or modify the user's live catalog or inventory.
 - Preserve keyboard access, labels, focus handling, and responsive layouts when changing UI.
 

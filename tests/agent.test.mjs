@@ -10,6 +10,56 @@ const attachAgent = (app, options) => attachAgentWithOptions(app, { fetchDocumen
 
 const url = 'https://github.com/example/tool';
 
+test('chat images reach the SDK as private temporary files, then are removed', async context => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-images-'));
+  const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j4mQAAAAASUVORK5CYII=', 'base64');
+  const image = { name: 'diagram.png', dataUrl: `data:image/png;base64,${bytes.toString('base64')}` };
+  const seen = [];
+  let fail = false;
+  const app = express().use(express.json({ limit: '28mb' }));
+  const stop = attachAgent(app, { directory, listMcpServers: async () => [], createCodex: () => ({
+    startThread: options => ({ runStreamed: async input => {
+      assert.equal(options.sandboxMode, 'workspace-write');
+      assert.equal(options.approvalPolicy, 'never');
+      assert.equal(input[0].type, 'text');
+      const file = input[1].path;
+      assert.equal(input[1].type, 'local_image');
+      assert.ok(file.startsWith(`${directory}/.chat-images-`));
+      assert.deepEqual(await readFile(file), bytes);
+      assert.equal((await lstat(file)).mode & 0o777, 0o600);
+      seen.push(file);
+      if (fail) throw new Error('Image model failed');
+      return { events: (async function* () {
+        yield { type: 'item.completed', item: { id: 'image-reply', type: 'agent_message', text: JSON.stringify({ reply: 'A diagram.', changes: [], categories: [], catalogChanges: [], desktopEntries: [] }) } };
+        yield { type: 'turn.completed' };
+      })() };
+    } }),
+  }) });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  context.after(async () => { server.close(); await stop(); await rm(directory, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  for (const message of ['Describe this', '']) {
+    assert.equal((await post(base, { mode: 'chat', message, images: [image] })).reply, 'A diagram.');
+    await assert.rejects(readFile(seen.at(-1)), { code: 'ENOENT' });
+  }
+  fail = true;
+  assert.match((await post(base, { mode: 'chat', message: '', images: [image] })).message, /Image model failed/);
+  await assert.rejects(readFile(seen.at(-1)), { code: 'ENOENT' });
+  const state = await readFile(path.join(directory, 'inventory.json'), 'utf8');
+  assert.ok(!state.includes(image.dataUrl));
+  for (const images of [null, {}, [null], Array(5).fill(image), [{ ...image, name: 'x'.repeat(256) }],
+    [{ name: 'bad.svg', dataUrl: 'data:image/svg+xml;base64,PHN2Zy8+' }],
+    [{ ...image, dataUrl: 'data:image/png;base64,bm90LWFuLWltYWdl' }],
+    [{ ...image, dataUrl: image.dataUrl.replace('png', 'jpeg') }],
+    [{ ...image, dataUrl: image.dataUrl + '!' }],
+    [{ ...image, dataUrl: `data:image/png;base64,${Buffer.alloc(5 * 1024 * 1024 + 1).toString('base64')}` }]]) {
+    const response = await fetch(`${base}/api/ai/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'chat', message: 'Describe', images }) });
+    assert.equal(response.status, 400);
+  }
+  assert.equal(seen.length, 3);
+});
+
 test('runtime API exposes plans without mutation and executes only approved plan IDs', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-runtime-api-'));
   const home = path.join(directory, 'home');
@@ -45,6 +95,7 @@ test('inventory discovers CLI-created Nix profiles without executing tools or wr
   attachAgent(app, { directory, createCodex: fakeCodex(calls), listMcpServers: async () => [] });
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
+  const unrelated = path.join(directory, 'unrelated');
   try {
     const base = `http://127.0.0.1:${server.address().port}`;
     const catalog = { ...Object.fromEntries(['category', 'categoryLabel', 'description', 'primaryLanguage', 'defaultInstallCommand', 'customNotes', 'customCommand'].map(field => [field, 'Tools'])), id: 'tool', name: 'Tool', repo: 'example/tool', githubUrl: url, tags: [] };
@@ -65,12 +116,16 @@ test('inventory discovers CLI-created Nix profiles without executing tools or wr
     await symlink(path.join(store, 'bin'), path.join(profile, 'bin'));
     assert.deepEqual(await inventory(), []);
     await chmod(path.join(store, 'bin', 'tool'), 0o755);
+    for (const name of ['install', 'update', 'uninstall']) await writeFile(path.join(profile, '..', `${name}.sh`), 'exit 0\n');
+    await writeFile(unrelated, '#!/bin/sh\nexit 99\n', { mode: 0o755 });
+    await symlink(unrelated, path.join(profile, '..', 'verify.sh'));
     const [receipt] = await inventory();
+    const quoted = name => `bash '${path.join(directory, 'workspace', 'apps', 'tool', `${name}.sh`)}'`;
+    assert.deepEqual([receipt.installCommand, receipt.updateCommand, receipt.uninstallCommand, receipt.verificationCommand], [...['install', 'update', 'uninstall'].map(quoted), '']);
     assert.equal(receipt.githubUrl, url);
     assert.equal(receipt.installed, true);
     assert.equal('enabled' in receipt, false);
     assert.equal(receipt.version, '1.2.3');
-    assert.equal(receipt.verificationCommand, '');
     assert.equal(await readFile(path.join(directory, 'inventory.json'), 'utf8'), state);
     await post(base, { mode: 'plan', message: 'Inspect Tool' });
     assert.match(calls[0].prompt, /Nix profile \(disk discovery\)/);
@@ -84,8 +139,6 @@ test('inventory discovers CLI-created Nix profiles without executing tools or wr
     assert.equal((await inventory())[0].installed, true);
     await rm(path.join(profile, 'bin'));
     await mkdir(path.join(profile, 'bin'));
-    const unrelated = path.join(directory, 'unrelated');
-    await writeFile(unrelated, '#!/bin/sh\nexit 99\n', { mode: 0o755 });
     await symlink(unrelated, path.join(profile, 'bin', 'tool'));
     assert.equal((await inventory())[0].installed, false);
     await rm(path.join(profile, 'bin'), { recursive: true });

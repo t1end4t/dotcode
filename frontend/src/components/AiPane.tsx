@@ -16,6 +16,7 @@ import {
   Github,
   Globe,
   Eraser,
+  ImagePlus,
 } from "lucide-react";
 import { ManageableItem } from "../data/items";
 import { readApiJson } from "../useCatalog";
@@ -97,6 +98,16 @@ export const formatToolCommand = (command: string) => {
   return script.replace(/\s+/g, " ").trim() || command;
 };
 
+interface ChatImage {
+  name: string;
+  dataUrl: string;
+}
+
+export const imageAttachmentError = (files: readonly Pick<File, "type" | "size">[], currentCount: number) =>
+  currentCount + files.length > 4 ? "Attach up to 4 images per message."
+    : files.some(file => !["image/png", "image/jpeg", "image/webp"].includes(file.type)) ? "Use PNG, JPEG, or WebP images."
+    : files.some(file => !file.size || file.size > 5 * 1024 * 1024) ? "Images must be non-empty and 5 MiB or smaller." : "";
+
 interface Message {
   id: string;
   role: "user" | "model";
@@ -105,6 +116,7 @@ interface Message {
   planId?: string;
   steps?: Step[];
   duration?: string;
+  images?: ChatImage[];
 }
 
 interface Step {
@@ -182,6 +194,12 @@ export const AiPane: React.FC<AiPaneProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [images, setImages] = useState<ChatImage[]>([]);
+  const [attachedUrls, setAttachedUrls] = useState<string[]>([]);
+  const [attachmentError, setAttachmentError] = useState("");
+  const [readingImages, setReadingImages] = useState(false);
+  const readingImagesRef = useRef(false);
+  const imagePickerRef = useRef<HTMLInputElement>(null);
   const [steps, setSteps] = useState<Step[]>([]);
   const [startedAt, setStartedAt] = useState(0);
   const [now, setNow] = useState(Date.now());
@@ -240,7 +258,7 @@ export const AiPane: React.FC<AiPaneProps> = ({
     }]);
   };
 
-  const runAgent = async (body: { mode: "chat"; message: string; history: { role: Message["role"]; text: string }[] } | { mode: "execute"; planId: string }) => {
+  const runAgent = async (body: { mode: "chat"; message: string; images: ChatImage[]; history: { role: Message["role"]; text: string }[] } | { mode: "execute"; planId: string }) => {
     const controller = new AbortController();
     controllerRef.current = controller;
     setIsLoading(true);
@@ -320,26 +338,57 @@ export const AiPane: React.FC<AiPaneProps> = ({
     }
   };
 
+  const attachImages = async (files: File[]) => {
+    if (!files.length || isLoading || readingImagesRef.current) return;
+    const error = imageAttachmentError(files, images.length);
+    setAttachmentError(error);
+    if (error) return;
+    readingImagesRef.current = true;
+    setReadingImages(true);
+    try {
+      const added = await Promise.all(files.map(file => new Promise<ChatImage>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ name: (file.name || "Clipboard image").slice(0, 255), dataUrl: String(reader.result) });
+        reader.onerror = () => reject(new Error("Could not read image. Attach it again."));
+        reader.onabort = () => reject(new Error("Reading image was cancelled."));
+        reader.readAsDataURL(file);
+      })));
+      setImages(previous => [...previous, ...added]);
+    } catch (error) {
+      setAttachmentError(error instanceof Error ? error.message : "Could not read image.");
+    } finally {
+      readingImagesRef.current = false;
+      setReadingImages(false);
+    }
+  };
+
   const handleSend = async (textToSend?: string) => {
-    const query = (textToSend || input).trim();
-    if (!query || isLoading || !workspace) return;
+    const sentImages = textToSend ? [] : images;
+    const query = [textToSend ?? input, ...(!textToSend ? attachedUrls : [])].filter(Boolean).join("\n").trim();
+    if ((!query && !sentImages.length) || isLoading || readingImagesRef.current || !workspace) return;
     const history = messages.slice(-10).map(({ role, text }) => ({ role, text }));
     setMessages((prev) => [...prev, {
       id: `user-${crypto.randomUUID()}`,
       role: "user",
       text: query,
+      images: sentImages,
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     }]);
-    if (!textToSend) setInput("");
-    await runAgent({ mode: "chat", message: query, history });
+    if (!textToSend) {
+      setInput("");
+      setImages([]);
+      setAttachedUrls([]);
+      setAttachmentError("");
+    }
+    await runAgent({ mode: "chat", message: query, images: sentImages, history });
   };
 
   useEffect(() => {
-    if (submittedPrompt && !isLoading) {
+    if (submittedPrompt && !isLoading && !readingImages) {
       onClearSubmittedPrompt();
       void handleSend(submittedPrompt);
     }
-  }, [submittedPrompt, isLoading]);
+  }, [submittedPrompt, isLoading, readingImages]);
 
   const approvePlan = async (planId: string) => {
     if (isLoading || !confirm("Apply the desktop integration changes shown? This changes launcher files outside the target folder.")) return;
@@ -348,7 +397,7 @@ export const AiPane: React.FC<AiPaneProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSend();
     }
@@ -376,7 +425,7 @@ export const AiPane: React.FC<AiPaneProps> = ({
         if (event.key === "Escape") onClose();
       }}
       onDragOver={event => {
-        if (event.dataTransfer.types.some(type => ["text/uri-list", "text/plain"].includes(type))) {
+        if (event.dataTransfer.types.some(type => ["Files", "text/uri-list", "text/plain"].includes(type))) {
           event.preventDefault();
           event.dataTransfer.dropEffect = "copy";
           setIsDragging(true);
@@ -388,17 +437,25 @@ export const AiPane: React.FC<AiPaneProps> = ({
       onDrop={event => {
         event.preventDefault();
         setIsDragging(false);
+        if (event.dataTransfer.files.length) {
+          void attachImages(Array.from(event.dataTransfer.files));
+          return;
+        }
         const text = event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
         const urls = text.split(/\s+/).filter(url => /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(url));
         if (!urls.length) return;
-        setInput(previous => [previous.trimEnd(), ...new Set(urls)].filter(Boolean).join("\n"));
+        setAttachedUrls(previous => [...new Set([...previous, ...urls])]);
         inputRef.current?.focus();
       }}
       className={`absolute inset-y-0 right-0 z-40 flex flex-col border-l border-(--ctp-surface0) bg-(--ctp-base)/95 backdrop-blur-xl transition-all duration-200 shadow-2xl lg:relative lg:z-auto lg:shrink-0 ${
         isExpanded ? "w-full md:w-[620px]" : "w-full sm:w-[420px] lg:w-[460px]"
       }`}
     >
-      {isDragging && <div role="status" className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center border-2 border-(--ctp-mauve) bg-(--ctp-mantle)/90 text-sm text-(--ctp-lavender)">Drop GitHub items to add them to your message</div>}
+      {isDragging && <div role="status" className="pointer-events-none absolute inset-2 z-50 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-(--ctp-mauve) bg-(--ctp-mantle)/90 p-6 text-center">
+        <Sparkles aria-hidden="true" className="h-6 w-6 text-(--ctp-mauve)" />
+        <p className="text-xs font-semibold text-(--ctp-text)">Drop images or GitHub items</p>
+        <p className="text-[11px] text-(--ctp-subtext0)">Attach context to your next message</p>
+      </div>}
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-(--ctp-surface0)/80 bg-(--ctp-mantle)/60">
         <div className="flex items-center gap-2.5">
@@ -477,6 +534,9 @@ export const AiPane: React.FC<AiPaneProps> = ({
             >
               {msg.duration && <div className="mb-1 text-[10px] uppercase tracking-wider text-(--ctp-subtext0)">{msg.text.startsWith("Error:") ? "Error" : "Final answer"}</div>}
               <div className="min-w-0 space-y-2 break-words">
+                {!!msg.images?.length && <div aria-label="Sent images" className="flex flex-wrap gap-2">
+                  {msg.images.map((image, index) => <img key={index} src={image.dataUrl} alt={image.name} className="h-[72px] w-[88px] rounded-lg border border-(--ctp-surface1) bg-(--ctp-mantle) object-contain" />)}
+                </div>}
                 {renderChatText(msg.text, true)}
               </div>
               {msg.planId && (
@@ -524,6 +584,19 @@ export const AiPane: React.FC<AiPaneProps> = ({
 
       {/* Input container */}
       <div className="p-3 border-t border-(--ctp-surface0) bg-(--ctp-mantle)/70">
+        {(!!images.length || !!attachedUrls.length) && <div aria-label="Attachments" className="mb-2 flex max-h-44 flex-wrap gap-2 overflow-auto">
+          {images.map((image, index) => <div key={index} className="relative">
+            <img src={image.dataUrl} alt={image.name} className="h-[72px] w-[88px] rounded-lg border border-(--ctp-surface1) bg-(--ctp-base) object-contain" />
+            <button type="button" aria-label={`Remove image ${image.name}`} onClick={() => setImages(previous => previous.filter((_, imageIndex) => imageIndex !== index))} className="absolute right-0 top-0 rounded bg-(--ctp-surface0) p-1 text-(--ctp-text) focus-visible:ring-2 focus-visible:ring-(--ctp-mauve)"><X aria-hidden="true" className="h-3 w-3" /></button>
+          </div>)}
+          {attachedUrls.map(url => <div key={url} title={url} className="relative flex h-[72px] w-[88px] flex-col gap-1 overflow-hidden rounded-lg border border-(--ctp-surface1) bg-(--ctp-base) p-2">
+            <Github aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-(--ctp-mauve)" />
+            <span className="line-clamp-2 break-words text-[10px] text-(--ctp-text)">{items.find(item => item.githubUrl.replace(/\/$/, "") === url.replace(/\/$/, ""))?.name || url.split("/").filter(Boolean).at(-1)}</span>
+            <button type="button" aria-label={`Remove ${url}`} onClick={() => setAttachedUrls(previous => previous.filter(entry => entry !== url))} className="absolute right-0 top-0 rounded bg-(--ctp-surface0) p-1 text-(--ctp-text) focus-visible:ring-2 focus-visible:ring-(--ctp-mauve)"><X aria-hidden="true" className="h-3 w-3" /></button>
+          </div>)}
+        </div>}
+        {readingImages && <p role="status" className="mb-2 text-xs text-(--ctp-subtext0)">Reading images...</p>}
+        {attachmentError && <p role="alert" className="mb-2 text-xs text-(--ctp-red)">{attachmentError}</p>}
         <div className="relative rounded-xl border border-(--ctp-surface1)/80 bg-(--ctp-base)/90 focus-within:border-(--ctp-mauve) focus-within:ring-1 focus-within:ring-(--ctp-mauve) transition-all shadow-inner">
           {/* ponytail: highlight-only overlay; inline icons in the editor need contenteditable. */}
           <div ref={highlightRef} aria-hidden="true" className="font-['Lilex_Nerd_Font',monospace] pointer-events-none absolute inset-x-0 top-0 h-[60px] overflow-hidden whitespace-pre-wrap break-words px-3.5 py-2.5 text-xs sm:text-[13px] text-(--ctp-text)">
@@ -535,20 +608,28 @@ export const AiPane: React.FC<AiPaneProps> = ({
             aria-label="Message Codex"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onPaste={event => {
+              const files = Array.from(event.clipboardData.files);
+              if (files.length) { event.preventDefault(); void attachImages(files); }
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Add, edit, remove, install, update, or uninstall"
             rows={2}
             className="font-['Lilex_Nerd_Font',monospace] relative block h-[60px] w-full resize-none break-words bg-transparent px-3.5 py-2.5 text-xs sm:text-[13px] text-transparent caret-(--ctp-text) placeholder-(--ctp-overlay2) [scrollbar-width:none] focus:outline-none"
           />
           <div className="flex items-center justify-between px-3 py-1.5 border-t border-(--ctp-surface0)/50 bg-(--ctp-mantle)/40">
-            <span className="text-[10px] text-(--ctp-overlay2)">
+            <div className="flex items-center gap-2">
+              <input ref={imagePickerRef} type="file" accept="image/png,image/jpeg,image/webp" multiple className="sr-only" tabIndex={-1} aria-label="Choose images" disabled={isLoading || readingImages || !workspace} onChange={event => { void attachImages(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
+              <button type="button" aria-label="Attach images" title="Attach images (PNG, JPEG, WebP; up to 4, 5 MiB each)" disabled={isLoading || readingImages || !workspace} onClick={() => imagePickerRef.current?.click()} className="rounded p-1 text-(--ctp-subtext0) hover:text-(--ctp-text) focus-visible:ring-2 focus-visible:ring-(--ctp-mauve) disabled:opacity-40"><ImagePlus aria-hidden="true" className="h-4 w-4" /></button>
+              <span className="text-[10px] text-(--ctp-overlay2)">
               Press <kbd className="px-1 py-0.5 rounded bg-(--ctp-surface0) text-(--ctp-subtext0) border border-(--ctp-surface1) font-mono">Enter</kbd> to send
-            </span>
+              </span>
+            </div>
             <div className="flex items-center gap-2">
               {isLoading && <button type="button" onClick={() => controllerRef.current?.abort()} className="flex items-center gap-1 rounded-md border border-(--ctp-surface1) px-3 py-1 text-xs text-(--ctp-subtext1)"><Square className="h-3 w-3" />Stop</button>}
               <button
                 onClick={() => handleSend()}
-                disabled={!input.trim() || isLoading || !workspace}
+                disabled={(!input.trim() && !images.length && !attachedUrls.length) || isLoading || readingImages || !workspace}
                 className="flex items-center gap-1 rounded-md bg-(--ctp-mauve) px-3 py-1 text-xs font-medium text-(--ctp-crust) hover:bg-(--ctp-lavender) disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <span>Plan</span>
