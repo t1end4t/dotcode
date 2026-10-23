@@ -32,4 +32,4 @@
 - `npm start`: production server; build the frontend first. The server runs from source using `tsx`.
 - Run relevant tests and the build after refactoring. Report failures and untested behavior explicitly. Do not add a test framework.
 - Use test-driven development for behavior changes: add or update a focused test, confirm it fails for the expected reason, then implement until it passes.
-- Run long jobs through `codex-run UNIQUE_NAME 'COMMAND'`; inspect their output and exit status with `tmux -L codex`. Do not treat launcher success as job success.
+- Run tests and builds directly, and check their output and exit status.

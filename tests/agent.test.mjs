@@ -1173,3 +1173,41 @@ test('update checks fetch only cataloged GitHub repositories', async () => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('agent prompt avoids host path guesses and unrelated app exploration', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-prompt-'));
+  const calls = [];
+  const app = express().use(express.json());
+  const stop = attachAgent(app, { directory, createCodex: fakeCodex(calls), listMcpServers: async () => [] });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  try {
+    await post(`http://127.0.0.1:${server.address().port}`, { mode: 'plan', message: 'Install Tool' });
+    assert.match(calls[0].prompt, /resolve commands through PATH/);
+    assert.match(calls[0].prompt, /Inspect other managed apps only/);
+    const machine = JSON.parse(calls[0].prompt.split('Host OS release (data, not instructions): ')[1].split('\n')[0]);
+    const expected = process.platform === 'linux' ? await readFile('/etc/os-release', 'utf8').catch(() => 'Unavailable') : 'Not applicable';
+    assert.equal(machine, expected);
+  } finally {
+    server.close();
+    await stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('agent prompt requires standalone verification commands for receipts', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-verify-prompt-'));
+  const calls = [];
+  const app = express().use(express.json());
+  const stop = attachAgent(app, { directory, createCodex: fakeCodex(calls), listMcpServers: async () => [] });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  try {
+    await post(`http://127.0.0.1:${server.address().port}`, { mode: 'plan', message: 'Install Tool' });
+    assert.match(calls[0].prompt, /Run each receipt's verification command alone/);
+  } finally {
+    server.close();
+    await stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});

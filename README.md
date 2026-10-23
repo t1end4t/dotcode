@@ -50,12 +50,15 @@ Use **Organize with AI** to group your library into categories.
 
 ### Before Making Changes
 
-- A chat request authorizes the requested changes inside the selected target folder, without a separate approval dialog.
+- A chat request authorizes the requested changes inside the managed workspace, without a separate approval dialog.
 - Desktop launcher changes require separate approval. Runtime buttons and form submissions authorize their exact actions.
 - Adding or removing a card does not install or uninstall its tool.
 - Installed status requires a verified command or supported disk discovery; it does not guarantee that a tool runs correctly.
-- The assistant is instructed to save `install.sh`, `update.sh`, `uninstall.sh`, and `verify.sh` under the selected target folder's `apps/<id>/`. Later operations reuse these scripts after inspection. Existing apps gain missing scripts during an authorized install or update; scripts are not created retroactively. Nix profile discovery exposes saved script paths, but does not verify their contents or execute them.
+- The assistant is instructed to save `install.sh`, `update.sh`, `uninstall.sh`, and `verify.sh` under the managed workspace's `apps/<id>/`. Later operations reuse these scripts after inspection. Existing apps gain missing scripts during an authorized install or update; scripts are not created retroactively. Nix profile discovery exposes saved script paths, but does not verify their contents or execute them.
+- Nix install/update scripts must register a permanent `apps/<id>/gc-root` after candidate verification and check it with `nix-store --query --roots`. This protects the rooted version and its dependencies from `nix-collect-garbage -d`, including when run with sudo. Existing scripts need repair during an authorized update; this policy is assistant-driven, not a server-enforced guarantee. Uninstall removes the root without collecting shared store paths.
 - Failed or stopped operations can leave partial changes. Inspect them before retrying.
+- “Missing successful verification command” means the receipt did not match a successful command event; it does not prove installation failed. Ask the assistant to inspect the existing installation, run its `verify.sh` as a standalone command, and register it without reinstalling.
+- DotCode supplies the host OS release and inventory to the assistant. It is instructed to batch inspection, resolve commands through `PATH` (including on NixOS), and avoid unrelated app exploration. Lifecycle scripts, artifact verification, and launcher approval still apply; fewer steps are not guaranteed.
 
 ## Your Workspace
 
@@ -74,7 +77,7 @@ This directory holds machine-local data, not application source. Keep it out of 
 
 - Set `DOTCODE_HOME` to use another data directory. Existing data is not moved automatically.
 - When migrating an older data directory, retain a symlink at its old location until stored installation paths and service references have been updated.
-- Use **Target folder** in the header to choose where the assistant works. This does not move your library or installations.
+- The assistant uses `DOTCODE_HOME/workspace` (`~/.dotcode/workspace` by default). The dashboard has no folder picker; previously saved folder selections are ignored. Agent setup applies to this workspace, not global agent settings.
 - Keep one DotCode server running per machine. Logs may contain local paths and command output.
 
 ## Configuration

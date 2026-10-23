@@ -148,19 +148,13 @@ test("card details display metadata without manual editing or removal controls",
   assert.doesNotMatch(renderToStaticMarkup(<App />), /Reset Defaults/);
 });
 
-test("the target folder picker belongs in the app header; chat keeps clear conversation", () => {
+test("the assistant uses the default managed workspace without a folder picker; chat keeps clear conversation", () => {
   const dashboard = renderToStaticMarkup(<App />);
   const chat = renderToStaticMarkup(<AiPane isOpen onClose={() => {}} items={INITIAL_ITEMS} onClearSubmittedPrompt={() => {}} onInventoryChanged={() => {}} />);
   assert.doesNotMatch(dashboard + chat, /Check Updates|Add Item|Export Script|Quick actions|Install from GitHub|Prepare scripts only/);
-  const header = dashboard.slice(0, dashboard.indexOf('</header>'));
-  assert.match(header, /aria-label="Target folder"/);
-  assert.match(header, /aria-haspopup="dialog"/);
-  assert.match(dashboard, /Use this folder/);
-  assert.match(dashboard, /aria-label="Parent folder"/);
-  assert.match(dashboard, /<dialog[^>]*aria-labelledby="codex-folder-title"/);
-  assert.match(dashboard, /aria-label="Close folder picker"/);
-  assert.match(dashboard, />Cancel<\/button>/);
-  assert.doesNotMatch(chat, /Target folder|Use this folder|<dialog/);
+  assert.doesNotMatch(dashboard + chat, /Target folder|Use this folder|codex-folder-title|Close folder picker/);
+  const appSource = readFileSync(new URL("../frontend/src/App.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(appSource, /dotcode_codex_workspace|x-dotcode-workspace/);
   assert.doesNotMatch(chat, /id="codex-target-folder"|Absolute path or ~\/project/);
   assert.match(chat, /aria-label="Clear conversation"/);
   assert.match(chat, /lucide-eraser/);
