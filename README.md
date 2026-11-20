@@ -98,6 +98,26 @@ Set environment variables when starting the server. See `.env.example` for basic
 
 Built with React, TypeScript, Vite, Express, and the Codex SDK.
 
+### Isolated UI prototype (throwaway)
+
+```bash
+npm run prototype
+```
+
+Open **http://127.0.0.1:5174/?variant=A**. Compare **A** (Card grid),
+**B** (table), and **C** (split view) with the bottom switcher or arrow keys.
+Search, Kind filters, selection, and install/enable/disable actions use mock data
+in memory; reload to reset. Expand “Trạng thái prototype” to inspect the state.
+
+The entry, fixtures, and styles live in `frontend/prototype/`, served by
+`frontend/vite.prototype.config.ts` without an API proxy or Express server.
+This does not use `DOTCODE_HOME` or the app's storage. The normal build only
+bundles the existing app. Keep this experiment on `t1end4t/ui-prototype`;
+port only the chosen design into the app after review.
+Run `npm run prototype:check` to type-check the isolated prototype.
+With its server running, `npm run prototype:smoke` checks the separate entry and
+that catalog writes return 404 instead of reaching the application backend.
+
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Start development mode with file watching. |
