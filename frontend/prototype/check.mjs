@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 
 const origin = "http://127.0.0.1:5174";
-const html = await (await fetch(`${origin}/?variant=A`)).text();
+const html = await (await fetch(`${origin}/`)).text();
 assert.match(html, /\/main\.tsx/, "Prototype must serve its separate entry");
 const mutation = await fetch(`${origin}/api/catalog`, {
   method: "PUT",

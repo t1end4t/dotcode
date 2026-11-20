@@ -104,19 +104,26 @@ Built with React, TypeScript, Vite, Express, and the Codex SDK.
 npm run prototype
 ```
 
-Open **http://127.0.0.1:5174/?variant=A**. Compare **A** (Card grid),
-**B** (table), and **C** (split view) with the bottom switcher or arrow keys.
-Search, Kind filters, selection, and install/enable/disable actions use mock data
-in memory; reload to reset. Expand “Trạng thái prototype” to inspect the state.
+Open **http://127.0.0.1:5174/**. The Library uses repo cards with English
+GitHub About descriptions, owner avatars, search and Kind/status filters. Try Install, Enable/Disable,
+Uninstall and adding a GitHub repo. **Add repository** searches the public
+GitHub API by keyword, `owner/repo`, or URL; results show About, language, stars
+and Library/installation badges. Add to Library saves only an in-memory Card,
+without installing it. Search uses no token and may reach GitHub rate limits. Open the AI sidebar or use **Ask assistant** on a
+card to carry that repo into chat. Chat and installation actions are explicitly
+simulated; no AI provider or installer is connected. Reload to reset all state.
 
 The entry, fixtures, and styles live in `frontend/prototype/`, served by
 `frontend/vite.prototype.config.ts` without an API proxy or Express server.
 This does not use `DOTCODE_HOME` or the app's storage. The normal build only
 bundles the existing app. Keep this experiment on `t1end4t/ui-prototype`;
-port only the chosen design into the app after review.
+port the chosen design into the app after review.
 Run `npm run prototype:check` to type-check the isolated prototype.
 With its server running, `npm run prototype:smoke` checks the separate entry and
 that catalog writes return 404 instead of reaching the application backend.
+With the prototype open in an Orca browser tab, run
+`node frontend/prototype/check-ui.mjs <browserPageId>` for the UI interaction check.
+This check resets the in-memory prototype and never touches the live app.
 
 | Command | Purpose |
 | --- | --- |

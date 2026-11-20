@@ -1,0 +1,558 @@
+{
+  "schemaVersion": "uizze.visual-evidence.v1",
+  "scope": "Extend the approved English graphite prototype with public GitHub discovery and clearer Library/installation badges. Desktop 1440x959 and narrow 389x843 CSS px.",
+  "platform": "web",
+  "createdAt": "2026-11-20T11:02:26.367177+00:00",
+  "comparison": "existing-system",
+  "comparisonNotes": "Compared the actual baseline and direction.md. Preserved compact rounded Cards, typography and inset Assistant. No generated target or pixel-perfect claim.",
+  "baseline": [
+    {
+      "path": "before-desktop.png",
+      "kind": "image",
+      "sha256": "c54b8e414a2add076ee3acc699d9e6564e2b440b6198991669cdc438870c9ad5"
+    }
+  ],
+  "sources": [
+    {
+      "path": "../../frontend/prototype/main.tsx",
+      "sha256": "0ac4dd01a28b86d56dd00170fd5f76f14412b48943fa95c0038a1b5b5bc79b3e"
+    },
+    {
+      "path": "../../frontend/prototype/prototype.css",
+      "sha256": "c46c89bb194ec85066ffe7ab909ab761b7e8dc321a8434d7166e9d5e7e423bb6"
+    },
+    {
+      "path": "../../frontend/prototype/index.html",
+      "sha256": "3f4986c1e47ad8e1103ecd86f5378e90c409c25ddf532164f8aec296bca19762"
+    },
+    {
+      "path": "../../frontend/vite.prototype.config.ts",
+      "sha256": "2c2b7925d22ee38c17d00c9f68926d0a8aff3023ba06a88f86b5e44fd4d0391e"
+    },
+    {
+      "path": "../../frontend/public/fonts/public-sans.ttf",
+      "sha256": "d75a7dc1a27eb9e336d5b33f55489d2ecb5621bf694d5c43b2415bce2ca830a8"
+    },
+    {
+      "path": "../../frontend/public/fonts/ibm-plex-mono.ttf",
+      "sha256": "6a3412f058c7d8dfd9170c41e85ade48e5156ecb89356110ca57a0a27734af46"
+    },
+    {
+      "path": "../../frontend/prototype/check-ui.mjs",
+      "sha256": "46283e1bbe29d6317af918538d237e10a16326ffc3037e04cf603fb164f2293b"
+    }
+  ],
+  "requiredChecks": [
+    {
+      "id": "library-desktop",
+      "kind": "visual"
+    },
+    {
+      "id": "library-assistant",
+      "kind": "visual"
+    },
+    {
+      "id": "search-idle",
+      "kind": "visual"
+    },
+    {
+      "id": "search-desktop",
+      "kind": "visual"
+    },
+    {
+      "id": "search-added-desktop",
+      "kind": "interaction"
+    },
+    {
+      "id": "search-mobile",
+      "kind": "visual"
+    },
+    {
+      "id": "library-mobile",
+      "kind": "visual"
+    },
+    {
+      "id": "library-mobile-status",
+      "kind": "visual"
+    },
+    {
+      "id": "fixture-added",
+      "kind": "interaction"
+    },
+    {
+      "id": "fixture-empty",
+      "kind": "visual"
+    },
+    {
+      "id": "fixture-rate-limit",
+      "kind": "visual"
+    },
+    {
+      "id": "fixture-loading",
+      "kind": "visual"
+    },
+    {
+      "id": "mobile-fixture-added",
+      "kind": "interaction"
+    },
+    {
+      "id": "mobile-fixture-empty",
+      "kind": "visual"
+    },
+    {
+      "id": "mobile-fixture-rate-limit",
+      "kind": "visual"
+    },
+    {
+      "id": "mobile-fixture-loading",
+      "kind": "visual"
+    }
+  ],
+  "checks": [
+    {
+      "id": "library-desktop",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Default Library, Assistant closed",
+      "environment": {
+        "width": 1440,
+        "height": 959,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          1315,
+          876
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Compared with before-desktop.png and direction.md. Green enabled, amber disabled and neutral not-installed pills add readable backgrounds and borders. All six Cards and actions fit without horizontal overflow.",
+      "artifacts": [
+        {
+          "path": "library-desktop.png",
+          "kind": "image",
+          "sha256": "74d3c9496e8a8e70d000a11e759f9e1d88e95f7f7fa16d466ea13b2a06ed987c"
+        }
+      ]
+    },
+    {
+      "id": "library-assistant",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Context7 in Assistant",
+      "environment": {
+        "width": 1440,
+        "height": 959,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          1315,
+          876
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "The disabled pill matches the Card; action and state fit together above the composer.",
+      "artifacts": [
+        {
+          "path": "library-assistant.png",
+          "kind": "image",
+          "sha256": "0173406a5c637afe3a9e0f20b713f6682d81636dff61458499b639916f3463f0"
+        }
+      ]
+    },
+    {
+      "id": "search-idle",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Add repository before searching",
+      "environment": {
+        "width": 1440,
+        "height": 959,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          1315,
+          876
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Single aligned search field and Search button; suggestions, help, close and Done remain visible.",
+      "artifacts": [
+        {
+          "path": "search-idle.png",
+          "kind": "image",
+          "sha256": "de4b89552f1c07b60dbc303a108be291946abc6e46c24980bf2e8e33fb8bcbe9"
+        }
+      ]
+    },
+    {
+      "id": "search-desktop",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Live public GitHub search: llama.cpp",
+      "environment": {
+        "width": 1440,
+        "height": 959,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          1315,
+          876
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Actual GitHub results show About, language and stars. ggml-org/llama.cpp is In Library and Not installed. Other results offer Add to Library.",
+      "artifacts": [
+        {
+          "path": "search-desktop.png",
+          "kind": "image",
+          "sha256": "43d1c77d98d6daaf20c3b14d09784a7ec26272e0aac45b60daef2c73d50d7f85"
+        }
+      ]
+    },
+    {
+      "id": "search-added-desktop",
+      "kind": "interaction",
+      "status": "pass",
+      "state": "Live public GitHub result added",
+      "environment": {
+        "width": 1440,
+        "height": 959,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          1315,
+          876
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "abetlen/llama-cpp-python changes to In Library and Not installed; Library count increases from six to seven. Existing ggml-org/llama.cpp is preserved.",
+      "artifacts": [
+        {
+          "path": "search-added-desktop.png",
+          "kind": "image",
+          "sha256": "f86fcf0959a7c97ab445870f5e751a1df602402d365b61025f970fd9661239b3"
+        }
+      ],
+      "steps": [
+        "Reload isolated prototype; search GitHub for llama.cpp",
+        "Wait for actual public API results; inspect About and stars",
+        "Add abetlen/llama-cpp-python to Library",
+        "Assert seven Cards and Not installed announcement; inspect changed badge",
+        "Close dialog, inspect Library and reload to reset"
+      ]
+    },
+    {
+      "id": "search-mobile",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Live public GitHub results after Add at narrow width",
+      "environment": {
+        "width": 389,
+        "height": 843,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          356,
+          770
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Repo names wrap and controls move beneath descriptions; In Library and installation state are both visible. Results scroll independently while Done stays visible. No horizontal overflow.",
+      "artifacts": [
+        {
+          "path": "search-mobile.png",
+          "kind": "image",
+          "sha256": "c35a6b2cebd221c83f8daa86c13109e5c68fdc24bb1f2c2769cc02a16d38c536"
+        }
+      ]
+    },
+    {
+      "id": "library-mobile",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Library after live addition at narrow width",
+      "environment": {
+        "width": 389,
+        "height": 843,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          356,
+          770
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Single-column Cards; readable enabled pills and lifecycle actions fit beside version/backend.",
+      "artifacts": [
+        {
+          "path": "library-mobile.png",
+          "kind": "image",
+          "sha256": "b25cd6dbb1abf291bedbffa5df4983d4d53bb285e95864f4231be2dc2e4bb88c"
+        }
+      ]
+    },
+    {
+      "id": "library-mobile-status",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Scrolled Library at narrow width",
+      "environment": {
+        "width": 389,
+        "height": 843,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          356,
+          770
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Enabled, Disabled and Not installed pills remain readable. The longer installed labels fit with metadata and actions.",
+      "artifacts": [
+        {
+          "path": "library-mobile-status.png",
+          "kind": "image",
+          "sha256": "c49231aaca3f27bd852d630653ff38b5539eac4225fd1c15777ed5e5d0411b31"
+        }
+      ]
+    },
+    {
+      "id": "fixture-added",
+      "kind": "interaction",
+      "status": "pass",
+      "state": "Deterministic fixture: in-Library states and Add recovery",
+      "environment": {
+        "width": 1440,
+        "height": 959,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          1315,
+          876
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Mocked GitHub data, not live results. All three states are visible. The interaction assertions passed at this viewport.",
+      "artifacts": [
+        {
+          "path": "fixture-added.png",
+          "kind": "image",
+          "sha256": "486353affdf2c700d78529fa6b78150cda65c3e031d2e6d67057cb6babbffd45"
+        }
+      ],
+      "steps": [
+        "Reload isolated prototype and check lifecycle, filters, chat and preserved Card on uninstall",
+        "Use deterministic api.github.com fetch fixtures; reject external URL before fetch",
+        "Correct input and search; verify duplicate Add is absent and disabled state is explicit",
+        "Add example/new-repo; assert seven Cards and Not installed; unknown installer stays disabled",
+        "Look up exact GitHub URL with .git, query and hash; no duplicate Card",
+        "Search no-results, then simulate 429 and retry; input stays valid and results recover",
+        "Reject malformed API data; hold request pending to inspect loading state",
+        "Release old request after replacement search and after dismissal; stale data stays absent",
+        "Restore native fetch and reload; assert six initial Cards"
+      ]
+    },
+    {
+      "id": "fixture-empty",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Deterministic GitHub fixture: empty",
+      "environment": {
+        "width": 1440,
+        "height": 959,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          1315,
+          876
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "No repositories found and recovery guidance are visible. This is a controlled test response.",
+      "artifacts": [
+        {
+          "path": "fixture-empty.png",
+          "kind": "image",
+          "sha256": "f57387a05b25b313ae691d099bd352611d17fac16f87afe53e4b277435957a0c"
+        }
+      ]
+    },
+    {
+      "id": "fixture-rate-limit",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Deterministic GitHub fixture: rate-limit",
+      "environment": {
+        "width": 1440,
+        "height": 959,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          1315,
+          876
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Readable rate-limit error and Retry search; corrected input is not marked invalid. This is a controlled test response.",
+      "artifacts": [
+        {
+          "path": "fixture-rate-limit.png",
+          "kind": "image",
+          "sha256": "efb4f221a5ff32ee6caf91a0027c1ac97b9ad91a62f1ad903d9d82584358fd59"
+        }
+      ]
+    },
+    {
+      "id": "fixture-loading",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Deterministic GitHub fixture: loading",
+      "environment": {
+        "width": 1440,
+        "height": 959,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          1315,
+          876
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Held request shows Searching GitHub and a disabled Search button; Close and Done remain available. This is a controlled test response.",
+      "artifacts": [
+        {
+          "path": "fixture-loading.png",
+          "kind": "image",
+          "sha256": "3409248d621e5518b8153df76ef9c5491ba0cd8cff599ca07997d66bf91fa470"
+        }
+      ]
+    },
+    {
+      "id": "mobile-fixture-added",
+      "kind": "interaction",
+      "status": "pass",
+      "state": "Deterministic fixture: in-Library states and Add recovery",
+      "environment": {
+        "width": 389,
+        "height": 843,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          356,
+          770
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Mocked GitHub data, not live results. All three states are visible. The interaction assertions passed at this viewport.",
+      "artifacts": [
+        {
+          "path": "mobile/fixture-added.png",
+          "kind": "image",
+          "sha256": "9b8f1efc3a890a8496048919e2a55a38ca20b299b3c4db56ffe9c548a62cfa33"
+        }
+      ],
+      "steps": [
+        "Reload isolated prototype and check lifecycle, filters, chat and preserved Card on uninstall",
+        "Use deterministic api.github.com fetch fixtures; reject external URL before fetch",
+        "Correct input and search; verify duplicate Add is absent and disabled state is explicit",
+        "Add example/new-repo; assert seven Cards and Not installed; unknown installer stays disabled",
+        "Look up exact GitHub URL with .git, query and hash; no duplicate Card",
+        "Search no-results, then simulate 429 and retry; input stays valid and results recover",
+        "Reject malformed API data; hold request pending to inspect loading state",
+        "Release old request after replacement search and after dismissal; stale data stays absent",
+        "Restore native fetch and reload; assert six initial Cards"
+      ]
+    },
+    {
+      "id": "mobile-fixture-empty",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Deterministic GitHub fixture: empty",
+      "environment": {
+        "width": 389,
+        "height": 843,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          356,
+          770
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "No repositories found and recovery guidance are visible. This is a controlled test response.",
+      "artifacts": [
+        {
+          "path": "mobile/fixture-empty.png",
+          "kind": "image",
+          "sha256": "833059ed5b7707fe4019a4c4759c20e27fe5229d025e0f3315c6dd30a080cdf8"
+        }
+      ]
+    },
+    {
+      "id": "mobile-fixture-rate-limit",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Deterministic GitHub fixture: rate-limit",
+      "environment": {
+        "width": 389,
+        "height": 843,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          356,
+          770
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Readable rate-limit error and Retry search; corrected input is not marked invalid. This is a controlled test response.",
+      "artifacts": [
+        {
+          "path": "mobile/fixture-rate-limit.png",
+          "kind": "image",
+          "sha256": "2887073f39f63b3e1f46401b6e62bf31b1f92917e27cb5f9f0482daf3fd4d495"
+        }
+      ]
+    },
+    {
+      "id": "mobile-fixture-loading",
+      "kind": "visual",
+      "status": "pass",
+      "state": "Deterministic GitHub fixture: loading",
+      "environment": {
+        "width": 389,
+        "height": 843,
+        "deviceScaleFactor": 0.9128709435462952,
+        "capturePixels": [
+          356,
+          770
+        ],
+        "kind": "browser",
+        "name": "Orca Chromium 150 on Linux"
+      },
+      "observed": "Held request shows Searching GitHub and a disabled Search button; Close and Done remain available. This is a controlled test response.",
+      "artifacts": [
+        {
+          "path": "mobile/fixture-loading.png",
+          "kind": "image",
+          "sha256": "ce66e5ad169ec91d9fe3d32d47a63f3d4920b117e5fbded4e36b768e448e7c55"
+        }
+      ]
+    }
+  ],
+  "verificationCommands": [
+    "npm run prototype:check",
+    "npm run prototype:smoke",
+    "DOTCODE_UI_EVIDENCE_DIR=.scratch/ui-discovery node frontend/prototype/check-ui.mjs fa9daf44-b9ba-481b-abea-574d24b91356 1315 876",
+    "DOTCODE_UI_EVIDENCE_DIR=.scratch/ui-discovery/mobile node frontend/prototype/check-ui.mjs fa9daf44-b9ba-481b-abea-574d24b91356 356 770",
+    "./node_modules/.bin/vite build --config frontend/vite.prototype.config.ts --outDir /tmp/dotcode-ui-build",
+    "git diff --check"
+  ],
+  "limitations": [
+    "Public GitHub search is live, read-only and unauthenticated; rate limits apply. Search shows the first ten matches.",
+    "Cards added in this isolated prototype stay in memory and reset on reload.",
+    "AI and installer remain simulated; unknown repositories have no fabricated install plan.",
+    "Empty, rate-limit, loading, malformed-response and stale-request checks use deterministic fetch fixtures; live search/Add is captured separately.",
+    "Image generation is unavailable. Browser narrow-viewport verification does not establish physical touch-device behavior."
+  ],
+  "unresolved": []
+}

@@ -1,0 +1,171 @@
+// Run against an Orca browser tab showing the isolated prototype (resets its state).
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const page = process.argv[2];
+assert.ok(page, 'Usage: node frontend/prototype/check-ui.mjs <browserPageId>');
+const cli = process.env.ORCA_CLI_COMMAND || 'orca-ide';
+function command(...args) {
+  const result = JSON.parse(execFileSync(cli, [...args, '--page', page, '--json'], { encoding: 'utf8' }));
+  assert.equal(result.ok, true, JSON.stringify(result.error));
+  return result.result;
+}
+function evaluate(code) {
+  const response = command('eval', '--expression', `(async () => JSON.stringify(await (async () => { ${code} })()))()`);
+  return JSON.parse(response.result);
+}
+function capture(name) {
+  const directory = process.env.DOTCODE_UI_EVIDENCE_DIR;
+  if (!directory) return;
+  mkdirSync(directory, { recursive: true });
+  const result = command('screenshot');
+  const data = Buffer.from(result.data, 'base64');
+  writeFileSync(join(directory, name + '.png'), data);
+  const environment = evaluate(`return {width:innerWidth,height:innerHeight,deviceScaleFactor:devicePixelRatio,overflow:document.documentElement.scrollWidth>innerWidth};`);
+  writeFileSync(join(directory, name + '.json'), JSON.stringify({ ...environment, capturePixels: [data.readUInt32BE(16), data.readUInt32BE(20)], path: name + '.png', fixture: true }, null, 2));
+}
+const settle = 'await new Promise(resolve => setTimeout(resolve, 80));';
+const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click(); ${settle} return true;`);
+const input = (selector, value) => evaluate(`{
+  const node = document.querySelector(${JSON.stringify(selector)});
+  const proto = node.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value').set.call(node, ${JSON.stringify(value)});
+  node.dispatchEvent(new Event('input', { bubbles: true }));
+} ${settle} return true;`);
+const count = () => evaluate(`return document.querySelectorAll(".tool-card").length;`);
+const checked = name => evaluate(`return document.querySelector('[role="switch"][aria-label="Enable ${name}"]')?.getAttribute('aria-checked');`);
+const origin = evaluate(`return location.origin;`);
+assert.equal(origin, 'http://127.0.0.1:5174', 'Refuse to test the live app');
+command('reload');
+command('wait', '--selector', '.tool-card');
+if (process.argv[3]) command('exec', '--command', `set viewport ${process.argv[3]} ${process.argv[4] || 844}`);
+assert.equal(evaluate(`return document.documentElement.lang;`), 'en');
+assert.equal(evaluate(`return document.querySelectorAll(".readme-preview").length;`), 0);
+assert.equal(count(), 6);
+click('.status-tabs button:nth-child(2)');
+assert.equal(count(), 4);
+click('.status-tabs button:first-child');
+evaluate(`const select = document.querySelector('.kind-filter select'); select.value = 'skill'; select.dispatchEvent(new Event('change', { bubbles: true })); ${settle} return true;`);
+assert.equal(count(), 1);
+evaluate(`const select = document.querySelector('.kind-filter select'); select.value = 'all'; select.dispatchEvent(new Event('change', { bubbles: true })); ${settle} return true;`);
+click('[aria-label="Install llama.cpp"]');
+assert.equal(checked('llama.cpp'), 'true');
+click('[aria-label="Enable llama.cpp"]');
+assert.equal(checked('llama.cpp'), 'false');
+click('[aria-label="Enable llama.cpp"]');
+assert.equal(checked('llama.cpp'), 'true');
+click('[aria-label="Uninstall llama.cpp"]');
+assert.equal(evaluate(`return document.querySelector("dialog[open] h2").textContent;`), 'Uninstall llama.cpp?');
+click('dialog[open] .icon-button');
+assert.equal(checked('llama.cpp'), 'true', 'Cancel must keep installation');
+click('[aria-label="Uninstall llama.cpp"]');
+click('dialog[open] .danger');
+assert.equal(count(), 6, 'Uninstall must preserve Card');
+assert.equal(evaluate(`return !!document.querySelector(\'[aria-label="Install llama.cpp"]\');`), true);
+input('input[type="search"]', 'no-such-repo');
+assert.equal(count(), 0);
+click('.empty .button');
+assert.equal(count(), 6);
+click('[aria-controls="assistant"]');
+assert.equal(evaluate(`return document.activeElement.id;`), 'chat-input');
+input('#chat-input', 'test draft');
+click('[aria-label="Close assistant"]');
+click('[aria-label="Ask assistant about Context7"]');
+assert.equal(evaluate(`return document.querySelector("#chat-input").value;`), 'test draft');
+assert.equal(evaluate(`return document.querySelector(".chat-context strong").textContent;`), 'Context7');
+click('.chat-composer button[type="submit"]');
+assert.equal(evaluate(`return document.querySelectorAll(".chat-message").length;`), 2);
+click('.context-actions .button');
+assert.equal(checked('Context7'), 'true', 'Chat action must update Card');
+click('[aria-label="Close assistant"]');
+assert.equal(evaluate(`return document.activeElement.getAttribute("aria-controls");`), 'assistant');
+// Deterministic GitHub boundary: no credentials, no live API writes, restored after the check.
+evaluate(`
+  window.__originalGitHubFetch = window.fetch;
+  window.__githubCalls = [];
+  window.__limitedOnce = false;
+  window.__slowGitHub = [];
+  const repo = (full_name, description) => ({ full_name, description, stargazers_count: 1200, language: 'TypeScript', owner: {} });
+  window.fetch = async (input, options) => {
+    const url = new URL(String(input));
+    if (url.hostname !== 'api.github.com') return window.__originalGitHubFetch(input, options);
+    window.__githubCalls.push(url.href);
+    const query = url.searchParams.get('q');
+    const added = repo('example/new-repo', 'A public repository from the GitHub test fixture.');
+    if (query === 'no-results') return new Response(JSON.stringify({ items: [] }));
+    if (query === 'rate-limit' && !window.__limitedOnce) { window.__limitedOnce = true; return new Response('{}', { status: 429 }); }
+    if (query === 'malformed') return new Response(JSON.stringify({ items: [{ full_name: 'invalid' }] }));
+    if (query === 'slow-search') { await new Promise(resolve => window.__slowGitHub.push(resolve)); return new Response(JSON.stringify({ items: [repo('stale/old-result', 'Stale result')] })); }
+    if (url.pathname === '/repos/example/new-repo') return new Response(JSON.stringify(added));
+    return new Response(JSON.stringify({ items: [repo('BurntSushi/ripgrep', 'Fast code search.'), repo('zed-industries/zed', 'Code editor.'), added] }));
+  };
+  return true;
+`);
+try {
+  click('[aria-label="Enable Zed"]');
+  click('.library-heading .button');
+  const callsBefore = evaluate(`return window.__githubCalls.length;`);
+  input('#repo-input', 'https://example.com/nope');
+  click('.discovery-search .primary');
+  assert.equal(evaluate(`return document.querySelector("#repo-input").getAttribute("aria-invalid");`), 'true');
+  assert.equal(evaluate(`return window.__githubCalls.length;`), callsBefore, 'Reject non-GitHub URLs before fetch');
+  input('#repo-input', 'developer tools');
+  assert.equal(evaluate(`return document.querySelector("#repo-input").getAttribute("aria-invalid");`), 'false');
+  click('.discovery-search .primary');
+  assert.equal(evaluate(`return document.querySelectorAll(".discovery-result").length;`), 3);
+  assert.equal(evaluate(`return document.querySelectorAll(".library-badge").length;`), 2);
+  assert.match(evaluate(`return document.querySelector('.discovery-result[aria-label="zed-industries/zed"] .status').textContent;`), /Installed · Disabled/);
+  assert.equal(evaluate(`return !!document.querySelector('[aria-label="Add BurntSushi/ripgrep to Library"]');`), false);
+  click('[aria-label="Add example/new-repo to Library"]');
+  assert.equal(count(), 7);
+  assert.match(evaluate(`return document.querySelector(".discovery-notice").textContent;`), /Added example\/new-repo to Library. Not installed./);
+  assert.equal(evaluate(`return document.querySelectorAll(".library-badge").length;`), 3);
+  assert.match(evaluate(`return document.querySelector('.discovery-result[aria-label="example/new-repo"] .status').textContent;`), /Not installed/);
+  assert.equal(evaluate(`return document.querySelector('[aria-label="Install new-repo"]').disabled;`), true, 'Unknown repo cannot pretend to have an installer');
+  capture('fixture-added');
+  input('#repo-input', 'https://github.com/example/new-repo.git?tab=readme#readme');
+  click('.discovery-search .primary');
+  assert.equal(evaluate(`return document.querySelectorAll(".discovery-result").length;`), 1);
+  assert.equal(evaluate(`return new URL(window.__githubCalls.at(-1)).pathname;`), '/repos/example/new-repo');
+  assert.equal(evaluate(`return document.querySelectorAll(".library-badge").length;`), 1);
+  assert.equal(count(), 7, 'Exact lookup must not add a duplicate Card');
+  input('#repo-input', 'no-results');
+  click('.discovery-search .primary');
+  assert.match(evaluate(`return document.querySelector(".discovery-results").textContent;`), /No repositories found/);
+  capture('fixture-empty');
+  input('#repo-input', 'rate-limit');
+  click('.discovery-search .primary');
+  assert.match(evaluate(`return document.querySelector("#repo-error").textContent;`), /request limit/);
+  assert.equal(evaluate(`return document.querySelector("#repo-input").getAttribute("aria-invalid");`), 'false', 'Network error must not mark input invalid');
+  capture('fixture-rate-limit');
+  click('.search-error .button');
+  assert.equal(evaluate(`return document.querySelectorAll(".discovery-result").length;`), 3, 'Retry must recover from rate limit');
+  input('#repo-input', 'malformed');
+  click('.discovery-search .primary');
+  assert.match(evaluate(`return document.querySelector("#repo-error").textContent;`), /invalid repository data/);
+  input('#repo-input', 'slow-search');
+  click('.discovery-search .primary');
+  assert.equal(evaluate(`return document.querySelector(".discovery-results").getAttribute("aria-busy");`), 'true');
+  capture('fixture-loading');
+  input('#repo-input', 'developer tools');
+  click('.discovery-search .primary');
+  evaluate(`window.__slowGitHub.splice(0).forEach(resolve => resolve()); ${settle} return true;`);
+  assert.equal(evaluate(`return document.querySelectorAll(".discovery-result").length;`), 3);
+  assert.equal(evaluate(`return !!document.querySelector('.discovery-result[aria-label="stale/old-result"]');`), false, 'Stale request must not replace newer results');
+  input('#repo-input', 'slow-search');
+  click('.discovery-search .primary');
+  click('[aria-label="Close add repository dialog"]');
+  click('.library-heading .button');
+  evaluate(`window.__slowGitHub.splice(0).forEach(resolve => resolve()); ${settle} return true;`);
+  assert.equal(evaluate(`return document.querySelectorAll(".discovery-result").length;`), 0, 'Dismissal must cancel pending results');
+  assert.equal(evaluate(`return document.querySelector(".discovery-results").getAttribute("aria-busy");`), 'false');
+  click('[aria-label="Close add repository dialog"]');
+  assert.equal(evaluate(`return document.documentElement.scrollWidth <= innerWidth;`), true, 'No horizontal overflow');
+} finally {
+  evaluate(`window.fetch = window.__originalGitHubFetch; delete window.__originalGitHubFetch; return true;`);
+}
+command('reload');
+command('wait', '--selector', '.tool-card');
+assert.equal(count(), 6, 'Reload must reset prototype');
+console.log('UI: lifecycle, uninstall cancel, preserved Card, search recovery, contextual chat, draft preservation, GitHub search, duplicate prevention, URL lookup, validation/rate-limit recovery, stale cancellation, Kind/status filters and reset: OK');
