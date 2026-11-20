@@ -1,3 +1,4 @@
+import { mergeInstallerReceipts, type SkillReceipt } from "./installer";
 import { useEffect, useRef, useState } from "react";
 import { INITIAL_ITEMS, type ManageableItem } from "./data/items";
 import { applyReleaseCheck, mergeInventory, type Installation, type CategoryAssignment, type ReleaseCheck } from "./inventory";
@@ -31,9 +32,11 @@ export function useCatalog() {
 
   const refreshInventory = async () => {
     try {
-      const response = await fetch("/api/inventory");
-      const data = await readApiJson(response);
-      setItems(previous => mergeInventory(previous, data.installations as Installation[], data.categories as CategoryAssignment[] | undefined, [...releaseChecks.current.values()]));
+      const [data, installer] = await Promise.all([
+        fetch("/api/inventory").then(readApiJson),
+        fetch("/api/installer").then(readApiJson),
+      ]);
+      setItems(previous => mergeInstallerReceipts(mergeInventory(previous, data.installations as Installation[], data.categories as CategoryAssignment[] | undefined, [...releaseChecks.current.values()]), installer.receipts as SkillReceipt[]));
       setInventoryError("");
     } catch (error) {
       setInventoryError(error instanceof Error ? error.message : "Inventory unavailable.");

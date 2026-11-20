@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createRuntime } from './runtime.mjs';
+import { createInstaller } from './installer.mjs';
 
 async function readMcpServers() {
   const { stdout } = await promisify(execFile)('codex', ['mcp', 'list', '--json'], { timeout: 10000 });
@@ -299,6 +300,7 @@ export function attachAgent(app, {
   fetchDocumentation = globalThis.fetch,
   desktopDataHome = process.env.XDG_DATA_HOME || path.join(homedir(), '.local', 'share'),
   runtimeOptions = {},
+  installerOptions = {},
 } = {}) {
   directory = path.resolve(directory);
   const appDirectory = fileURLToPath(new URL('.', import.meta.url));
@@ -311,6 +313,7 @@ export function attachAgent(app, {
   checkDirectory(directory);
   const plans = new Map();
   const runtime = createRuntime({ ...runtimeOptions, directory });
+  const installer = createInstaller({ ...installerOptions, directory });
   const controllers = new Set();
   let busy = false;
   let initializingCatalog = false;
@@ -444,6 +447,35 @@ export function attachAgent(app, {
     checkDirectory(target);
     return target;
   };
+
+  app.use('/api/installer', (req, res, next) => {
+    if (!isLocalRequest(req)) return res.status(403).json({ error: 'Local, same-origin requests only.' });
+    if (req.method !== 'GET' && !req.is('application/json')) return res.status(415).json({ error: 'JSON required.' });
+    if (busy || initializingCatalog) return res.status(409).json({ error: 'Another task is running. Wait for it to finish.', code: 'BUSY' });
+    res.setHeader('cache-control', 'no-store');
+    next();
+  });
+
+  const installerFailure = (res, error) => res.status(['CONFLICT', 'BUSY'].includes(error.code) ? 409 : 400).json({ error: error.message, code: error.code });
+  app.get('/api/installer', async (_req, res) => {
+    try { res.json(await installer.snapshot()); }
+    catch (error) { installerFailure(res, error); }
+  });
+  app.post('/api/installer/plan', async (req, res) => {
+    busy = true;
+    try {
+      if (req.body?.action === 'install' && !(await loadCatalog() ?? []).some(card => typeof req.body.githubUrl === 'string' && catalogKey(card.githubUrl) === catalogKey(req.body.githubUrl))) throw new Error('Choose a Card from the Library.');
+      res.json(await installer.plan(req.body));
+    } catch (error) { installerFailure(res, error); }
+    finally { busy = false; }
+  });
+  app.post('/api/installer/execute', async (req, res) => {
+    if (typeof req.body?.planId !== 'string') return res.status(400).json({ error: 'A plan ID is required.' });
+    busy = true;
+    try { res.json(await installer.execute(req.body.planId)); }
+    catch (error) { installerFailure(res, error); }
+    finally { busy = false; }
+  });
 
   app.get('/api/runtime', async (_req, res) => {
     res.setHeader('cache-control', 'no-store');

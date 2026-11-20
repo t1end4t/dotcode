@@ -77,7 +77,7 @@ This directory holds machine-local data, not application source. Keep it out of 
 
 - Set `DOTCODE_HOME` to use another data directory. Existing data is not moved automatically.
 - When migrating an older data directory, retain a symlink at its old location until stored installation paths and service references have been updated.
-- The assistant uses `DOTCODE_HOME/workspace` (`~/.dotcode/workspace` by default). The dashboard has no folder picker; previously saved folder selections are ignored. Agent setup applies to this workspace, not global agent settings.
+- The assistant uses `DOTCODE_HOME/workspace` (`~/.dotcode/workspace` by default). The dashboard has no folder picker; previously saved folder selections are ignored. Agent Setup forms apply to this workspace. GitHub skills installed from Cards activate globally for each agent.
 - Keep one DotCode server running per machine. Logs may contain local paths and command output.
 
 ## Configuration
@@ -110,3 +110,23 @@ Built with React, TypeScript, Vite, Express, and the Codex SDK.
 `server.ts` is the server entry point. `frontend/src/` contains the UI; `tests/` contains regression tests. `instructions.md` defines the assistant's runtime policy.
 
 Production still needs the server source and dependencies. The build does not type-check the server.
+
+### GitHub skills
+
+On a Library Card, click **Install** to install a repository containing `SKILL.md`
+(or legacy `skill.md`). For a nested skill, expand **Skill directory** and enter
+its relative directory, such as `skills/review`, before installing. Git must be
+available on `PATH`.
+
+The files Backend fetches the selected directory at an exact Git commit into
+`DOTCODE_HOME/store/skills/<component>/<commit>`. Receipts live separately in
+`DOTCODE_HOME/receipts.json`; the legacy inventory is unchanged. Installation
+activates the skill globally for Codex (`~/.agents/skills/<name>`) and Claude
+(`~/.claude/skills/<name>`). Each agent switch removes or recreates only its
+symlink, without downloading the skill again. **Uninstall** removes both
+Activations, the Store version and its Receipt, preserving the Card.
+
+Existing files, real directories, foreign symlinks and symlinked parent
+folders cause a conflict; DotCode leaves them untouched. Skills currently
+support regular files and directories. Repositories without a skill marker
+continue through the assistant's existing installation workflow.

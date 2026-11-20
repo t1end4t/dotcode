@@ -3,7 +3,6 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
-  Download,
   Trash2,
   Edit3,
   ExternalLink,
@@ -25,6 +24,7 @@ import {
   Check,
   Loader2,
 } from "lucide-react";
+import { SkillControls, installationStatus } from "./installer";
 import type { ManageableItem } from "./data/items";
 import { readApiJson, useCatalog } from "./useCatalog";
 import { AiPane } from "./components/AiPane";
@@ -431,7 +431,7 @@ export default function App() {
                             </div>
                           </div>
                           <span className={`runtime-badge shrink-0 ${item.installed ? "is-enabled" : ""}`}>
-                            {item.installed ? "Installed" : "Available"}
+                            {installationStatus(item)}
                           </span>
                         </div>
 
@@ -475,23 +475,7 @@ export default function App() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={(e) => handleToggleInstall(item.id, e)}
-                              className={`rt-button ${item.installed ? "" : "rt-primary"}`}
-                            >
-                              {item.installed ? (
-                                <>
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-[var(--ctp-green)]" />
-                                  <span>Installed</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Download className="h-3.5 w-3.5" />
-                                  <span>Install</span>
-                                </>
-                              )}
-                            </button>
+                            <SkillControls item={item} onChanged={refreshCatalog} onLegacyInstall={() => handleToggleInstall(item.id)} />
 
                             {item.hasUpdate && (
                               <button
@@ -600,13 +584,8 @@ export default function App() {
                               {item.customCommand || item.defaultInstallCommand}
                             </td>
                             <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={(e) => handleToggleInstall(item.id, e)}
-                                className={`rt-button ${item.installed ? "" : "rt-primary"}`}
-                              >
-                                {item.installed ? "Installed" : "Install"}
-                              </button>
+                              <span className="block mb-2">{installationStatus(item)}</span>
+                              <SkillControls item={item} onChanged={refreshCatalog} onLegacyInstall={() => handleToggleInstall(item.id)} />
                             </td>
                             <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1.5">
