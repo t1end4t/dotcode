@@ -1,4 +1,5 @@
 import type { Installation } from '../inventory';
+import type { SkillReceipt } from '../installer';
 
 export interface ManageableItem {
   id: string;
@@ -22,6 +23,7 @@ export interface ManageableItem {
   updateStatus?: string;
   updatedAt?: string;
   receipt?: Installation;
+  installedSkills?: SkillReceipt[];
 }
 
 const RAW_ITEMS: ManageableItem[] = [

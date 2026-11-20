@@ -1211,3 +1211,71 @@ test('agent prompt requires standalone verification commands for receipts', asyn
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('installer routes enforce local JSON requests', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-installer-api-'));
+  const app = express().use(express.json());
+  const stop = attachAgent(app, { directory, createCodex: fakeCodex([]), listMcpServers: async () => [], installerOptions: { home: directory + '-home' } });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(async () => { server.close(); await stop(); await rm(directory, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  for (const route of ['/api/installer', '/api/installer/plan', '/api/installer/execute']) {
+    const options = route === '/api/installer' ? {} : { method: 'POST', body: '{}' };
+    assert.equal((await fetch(base + route, { ...options, headers: { origin: 'https://evil.test', 'content-type': 'application/json' } })).status, 403);
+    if (route !== '/api/installer') assert.equal((await fetch(base + route, options)).status, 415);
+  }
+  assert.deepEqual(await (await fetch(base + '/api/installer')).json(), { receipts: [] });
+  const postInstaller = body => fetch(base + '/api/installer/plan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await postInstaller({ action: 'install', githubUrl: url })).status, 400);
+  assert.equal((await fetch(base + '/api/installer/execute', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 400);
+});
+
+test('installer plans hold the shared busy lock and install only from saved Cards', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dotcode-installer-lock-'));
+  const directory = path.join(root, 'data');
+  await mkdir(directory);
+  const card = { ...Object.fromEntries(['category', 'categoryLabel', 'description', 'primaryLanguage', 'defaultInstallCommand', 'customNotes', 'customCommand'].map(field => [field, 'Skills'])), id: 'review', name: 'Review', repo: 'example/tool', githubUrl: url, tags: ['skill'] };
+  await writeFile(path.join(directory, 'catalog.json'), JSON.stringify([card]));
+  let releaseFetch;
+  let entered;
+  const waiting = new Promise(resolve => { entered = resolve; });
+  const gate = new Promise(resolve => { releaseFetch = resolve; });
+  const commit = 'a'.repeat(40);
+  const app = express().use(express.json());
+  const stop = attachAgent(app, { directory, createCodex: fakeCodex([]), listMcpServers: async () => [], installerOptions: {
+    home: path.join(root, 'home'),
+    fetchRemote: async source => {
+      if (source.includes('/commits/')) { entered(); await gate; return new Response(JSON.stringify({ sha: commit })); }
+      return new Response(JSON.stringify({ tree: [{ path: 'skill.md', type: 'blob', mode: '100644' }] }));
+    },
+    run: async (_program, args, { cwd }) => {
+      if (args.includes('checkout')) await writeFile(path.join(cwd, 'skill.md'), '# Legacy skill');
+      return { stdout: args.includes('rev-parse') ? commit : '' };
+    },
+  } });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(async () => { releaseFetch(); server.close(); await stop(); await rm(root, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const request = (route, body) => fetch(base + route, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const planning = request('/api/installer/plan', { action: 'install', githubUrl: url });
+  await waiting;
+  for (const route of ['/api/runtime/plan', '/api/runtime/execute', '/api/installer/plan', '/api/installer/execute']) {
+    assert.equal((await request(route, {})).status, 409, route);
+  }
+  assert.equal((await fetch(base + '/api/installer')).status, 409);
+  releaseFetch();
+  const response = await planning;
+  assert.equal(response.status, 200);
+  const plan = await response.json();
+  assert.equal((await request('/api/installer/execute', { planId: plan.id })).status, 200);
+  assert.equal((await request('/api/installer/execute', { planId: plan.id })).status, 400);
+  const [receipt] = (await (await fetch(base + '/api/installer')).json()).receipts;
+  assert.equal(receipt.version, commit);
+  assert.equal(await readlink(receipt.activations.codex.path), receipt.storePath);
+  assert.equal(await readFile(path.join(receipt.storePath, 'skill.md'), 'utf8'), '# Legacy skill');
+  const uninstall = await (await request('/api/installer/plan', { action: 'uninstall', componentId: receipt.id })).json();
+  assert.equal((await request('/api/installer/execute', { planId: uninstall.id })).status, 200);
+  assert.equal(await readFile(path.join(directory, 'catalog.json'), 'utf8'), JSON.stringify([card]));
+});

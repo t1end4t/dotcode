@@ -24,7 +24,7 @@ for (const mode of ['default', 'environment', 'explicit']) {
       const directory = ${JSON.stringify(directory) ?? 'undefined'};
       const expected = ${JSON.stringify(expected)};
       const routes = new Map();
-      const stop = attachAgent({ get: (route, handler) => routes.set(route, handler), post() {}, put() {} }, { directory });
+      const stop = attachAgent({ get: (route, handler) => routes.set(route, handler), post() {}, put() {}, use() {} }, { directory });
       try {
         let response;
         await routes.get('/api/workspace')({ get() {} }, {
