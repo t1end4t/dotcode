@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "../tests/**/*.ts", "../tests/**/*.tsx"]
+  "include": ["src", "prototype", "../tests/**/*.ts", "../tests/**/*.tsx"]
 }

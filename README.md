@@ -2,6 +2,11 @@
 
 A local dashboard for developer tools, services, models, and coding agents.
 
+The default UI currently uses the Library prototype with in-memory sample data.
+Installation and assistant actions are simulated; the UI does not call the
+application backend. Reload resets its state. The backend features documented
+below are not exposed by this UI yet.
+
 ## What You Can Do
 
 - **Tools:** Browse GitHub projects, save notes, check releases, and manage installations through chat.
@@ -98,7 +103,11 @@ Set environment variables when starting the server. See `.env.example` for basic
 
 Built with React, TypeScript, Vite, Express, and the Codex SDK.
 
-### Isolated UI prototype (throwaway)
+### Library UI (prototype)
+
+`npm run dev` serves the Library prototype at **http://127.0.0.1:3000/**,
+and `npm run build` bundles the same UI for `npm start`.
+To run it separately without the application server:
 
 ```bash
 npm run prototype
@@ -113,17 +122,16 @@ without installing it. Search uses no token and may reach GitHub rate limits. Op
 card to carry that repo into chat. Chat and installation actions are explicitly
 simulated; no AI provider or installer is connected. Reload to reset all state.
 
-The entry, fixtures, and styles live in `frontend/prototype/`, served by
+The entry, fixtures, and styles live in `frontend/prototype/`. The default
+`frontend/index.html` reuses that entry; the separate server uses
 `frontend/vite.prototype.config.ts` without an API proxy or Express server.
-This does not use `DOTCODE_HOME` or the app's storage. The normal build only
-bundles the existing app. Keep this experiment on `t1end4t/ui-prototype`;
-port the chosen design into the app after review.
+The UI does not use `DOTCODE_HOME` or the app's storage.
 Run `npm run prototype:check` to type-check the isolated prototype.
 With its server running, `npm run prototype:smoke` checks the separate entry and
 that catalog writes return 404 instead of reaching the application backend.
-With the prototype open in an Orca browser tab, run
+With the Library UI open at port 3000 or 5174 in an Orca browser tab, run
 `node frontend/prototype/check-ui.mjs <browserPageId>` for the UI interaction check.
-This check resets the in-memory prototype and never touches the live app.
+This check resets the in-memory prototype and never changes backend data.
 
 | Command | Purpose |
 | --- | --- |
@@ -134,7 +142,7 @@ This check resets the in-memory prototype and never touches the live app.
 | `npm run build` | Type-check the frontend and tests, then bundle the frontend. |
 | `npm start` | Serve the production build. |
 
-`server.ts` is the server entry point. `frontend/src/` contains the UI; `tests/` contains regression tests. `instructions.md` defines the assistant's runtime policy.
+`server.ts` is the server entry point. `frontend/prototype/` contains the current UI; `frontend/src/` retains the previous backend-connected UI. `tests/` contains regression tests. `instructions.md` defines the assistant's runtime policy.
 
 Production still needs the server source and dependencies. The build does not type-check the server.
 

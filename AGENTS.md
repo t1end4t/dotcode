@@ -1,3 +1,5 @@
+Use `direnv exec . <command>` to run development commands in the repo environment.
+
 ## Agent skills
 
 ### Issue tracker

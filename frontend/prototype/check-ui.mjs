@@ -1,4 +1,4 @@
-// Run against an Orca browser tab showing the isolated prototype (resets its state).
+// Run against an Orca browser tab showing the fixture UI (resets its state).
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -36,8 +36,9 @@ const input = (selector, value) => evaluate(`{
 const count = () => evaluate(`return document.querySelectorAll(".tool-card").length;`);
 const checked = name => evaluate(`return document.querySelector('[role="switch"][aria-label="Enable ${name}"]')?.getAttribute('aria-checked');`);
 const origin = evaluate(`return location.origin;`);
-assert.equal(origin, 'http://127.0.0.1:5174', 'Refuse to test the live app');
+assert.ok(['http://127.0.0.1:3000', 'http://127.0.0.1:5174'].includes(origin), 'Refuse to test an unexpected origin');
 command('reload');
+assert.equal(evaluate(`return !!document.querySelector('script[type="module"][src="/prototype/main.tsx"], script[type="module"][src="/main.tsx"]');`), true, 'Refuse to test a UI other than the in-memory prototype');
 command('wait', '--selector', '.tool-card');
 if (process.argv[3]) command('exec', '--command', `set viewport ${process.argv[3]} ${process.argv[4] || 844}`);
 assert.equal(evaluate(`return document.documentElement.lang;`), 'en');
