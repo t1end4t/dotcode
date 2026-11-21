@@ -1,6 +1,6 @@
 import { mergeInstallerReceipts, type SkillReceipt } from "./installer";
 import { useEffect, useRef, useState } from "react";
-import { INITIAL_ITEMS, type ManageableItem } from "./data/items";
+import type { ManageableItem } from "./data/items";
 import { applyReleaseCheck, mergeInventory, type Installation, type CategoryAssignment, type ReleaseCheck } from "./inventory";
 
 export async function readApiJson(response: Response) {
@@ -51,7 +51,7 @@ export function useCatalog() {
       if (!catalog) {
         let legacy: ManageableItem[] | null = null;
         try { legacy = JSON.parse(localStorage.getItem("dotcode_items") || "null"); } catch {}
-        catalog = legacy ?? INITIAL_ITEMS;
+        catalog = legacy ?? [];
         await readApiJson(await fetch("/api/catalog", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ items: catalog }) }));
       }
       setItems(mergeInventory(catalog, []));

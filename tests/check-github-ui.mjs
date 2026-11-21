@@ -26,10 +26,11 @@ evaluate(`
   window.__searchOriginalFetch = window.fetch;
   window.__searchCalls = [];
   window.__savedCards = [];
+  window.__installRequests = [];
   window.__slowSearch = null;
   const card = { id: 'fixture-review', name: 'review', repo: 'example/review', githubUrl: 'https://github.com/example/review', category: 'Skills', categoryLabel: 'Skills',
     description: 'UI test fixture: review code.', tags: ['review'], primaryLanguage: 'TypeScript', stars: 42, latestReleaseAt: '2026-11-20T12:00:00Z',
-    defaultInstallCommand: '', customNotes: '', customCommand: '', detection: { checkedAt: new Date().toISOString(), commit: 'a'.repeat(40), badges: ['Skill'], skillPaths: [''] } };
+    defaultInstallCommand: '', customNotes: '', customCommand: '', detection: { checkedAt: new Date().toISOString(), commit: 'a'.repeat(40), badges: ['Skill'], skillPaths: ['skills/review'] } };
   window.fetch = async (input, options) => {
     const url = new URL(String(input), location.href);
     if (url.pathname.startsWith('/api/ai/')) throw new Error('AI must not be called');
@@ -42,6 +43,10 @@ evaluate(`
       return Response.json({ results: q === 'empty' ? [] : [card], warning: 'No GitHub token found. Anonymous limits apply.' });
     }
     if (url.pathname === '/api/catalog/cards') { window.__savedCards = [card]; return Response.json({ item: card }, { status: 201 }); }
+    if (url.pathname === '/api/installer/plan' || url.pathname === '/api/installer/execute') {
+      window.__installRequests.push([url.pathname, JSON.parse(options.body)]);
+      return Response.json(url.pathname.endsWith('/plan') ? { id: 'fixture-plan' } : { ok: true });
+    }
     if (url.pathname === '/api/catalog' && window.__savedCards.length) return Response.json({ items: window.__savedCards });
     return window.__searchOriginalFetch(input, options);
   };
@@ -80,6 +85,13 @@ try {
   evaluate('document.querySelector(".discovery > footer button").click(); return true;');
   command('wait', '--selector', '.tool-card[aria-label="review"]');
   assert.match(evaluate('return document.querySelector(\'.tool-card[aria-label="review"]\').textContent;'), /Skill.*Not installed.*Install/s);
+  assert.doesNotMatch(evaluate('return document.querySelector(\'.tool-card[aria-label="review"]\').textContent;'), /Skill directory/);
+  evaluate('document.querySelector(\'.tool-card[aria-label="review"] .rt-button\').click(); return true;');
+  command('wait', '--selector', '.tool-card[aria-label="review"] .rt-button:not(:disabled)');
+  assert.deepEqual(evaluate('return window.__installRequests;'), [
+    ['/api/installer/plan', { action: 'install', githubUrl: 'https://github.com/example/review', subpath: 'skills/review' }],
+    ['/api/installer/execute', { planId: 'fixture-plan' }],
+  ]);
   console.log('GitHub UI checks passed.');
 } finally {
   evaluate('window.fetch = window.__searchOriginalFetch; return true;');

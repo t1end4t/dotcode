@@ -40,7 +40,8 @@ export async function executeInstallerAction(body: Record<string, unknown>) {
 }
 
 export function SkillControls({ item, onChanged, onLegacyInstall }: { item: ManageableItem; onChanged: () => Promise<void>; onLegacyInstall: () => void }) {
-  const [subpath, setSubpath] = useState('');
+  // ponytail: select one detected skill automatically; add a Component picker for multi-skill repos.
+  const subpath = item.detection?.skillPaths.length === 1 ? item.detection.skillPaths[0] : '';
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const receipts = item.installedSkills ?? [];
@@ -71,12 +72,6 @@ export function SkillControls({ item, onChanged, onLegacyInstall }: { item: Mana
         onClick={() => item.installed ? onLegacyInstall() : void apply({ action: 'install', githubUrl: item.githubUrl, subpath: subpath.trim() })}>
         {working ? 'Working…' : item.installed ? 'Uninstall' : 'Install'}
       </button>
-      {!item.installed && <details className="text-xs text-[var(--dc-muted)]">
-        <summary className="cursor-pointer">Skill directory</summary>
-        <label className="flex flex-col gap-1 mt-2">Directory inside {item.repo}
-          <input aria-label={`Skill directory for ${item.name}`} value={subpath} disabled={working} onChange={event => setSubpath(event.target.value)} placeholder="Repository root (or skills/review)" className="rt-input" />
-        </label>
-      </details>}
     </>}
     {error && <p role="alert" className="text-xs text-(--ctp-red)">{error}</p>}
   </div>;

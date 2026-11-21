@@ -162,9 +162,8 @@ Production still needs the server source and dependencies. The build does not ty
 ### GitHub skills
 
 On a Library Card, click **Install** to install a repository containing `SKILL.md`
-(or legacy `skill.md`). For a nested skill, expand **Skill directory** and enter
-its relative directory, such as `skills/review`, before installing. Git must be
-available on `PATH`.
+(or legacy `skill.md`). When Detector finds a single skill, Install uses its
+directory automatically, including nested skills. Git must be available on `PATH`.
 
 The files Backend fetches the selected directory at an exact Git commit into
 `DOTCODE_HOME/store/skills/<component>/<commit>`. Receipts live separately in

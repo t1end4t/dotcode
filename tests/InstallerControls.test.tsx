@@ -16,7 +16,7 @@ test('Cards expose all three installation states and independent accessible agen
   assert.equal(installationStatus(item), 'Not installed');
   const available = renderToStaticMarkup(<SkillControls item={item} onChanged={async () => {}} onLegacyInstall={() => {}} />);
   assert.match(available, />Install<\/button>/);
-  assert.match(available, /Skill directory/);
+  assert.doesNotMatch(available, /Skill directory|<input/);
   for (const status of ['enabled', 'disabled'] as const) {
     const saved = { ...receipt, status, activations: { ...receipt.activations, codex: { ...receipt.activations.codex, enabled: status === 'enabled' } } };
     const [installed] = mergeInstallerReceipts([item], [saved]);

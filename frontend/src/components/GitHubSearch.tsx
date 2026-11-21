@@ -11,6 +11,7 @@ export function GitHubResults({ results, items, adding, onAdd }: { results: Mana
     {results.map(item => {
       const exists = items.some(card => repoKey(card.githubUrl) === repoKey(item.githubUrl));
       return <article key={item.githubUrl} className="discovery-result" aria-label={item.repo}>
+        <span className="owner-avatar"><Github size={26} /></span>
         <div className="discovery-result-body">
           <h3><a href={item.githubUrl} target="_blank" rel="noreferrer">{item.repo}</a></h3>
           <p>{item.description || 'No description provided.'}</p>
