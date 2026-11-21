@@ -97,12 +97,16 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       const target = receipt.activations[agent].path;
       await checkParents(target);
       const info = await optionalStat(target);
-      if (info && (receipt.kind === 'cli'
-        ? !info.isFile() || await readFile(target, 'utf8') !== wrapper(receipt)
-        : !info.isSymbolicLink() || path.resolve(path.dirname(target), await readlink(target)) !== receipt.storePath)) conflict(target);
+      if (info && !await ownsActivation(receipt, target, info)) conflict(target);
       result[agent] = { path: target, enabled: Boolean(info) };
     }
     return result;
+  }
+
+  async function ownsActivation(receipt, target, info) {
+    return receipt.kind === 'cli'
+      ? info.isFile() && await readFile(target, 'utf8') === wrapper(receipt)
+      : info.isSymbolicLink() && path.resolve(path.dirname(target), await readlink(target)) === receipt.storePath;
   }
 
   async function snapshot() {
@@ -160,22 +164,27 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     const value = source(body);
     const { tree, version } = await repository(value);
     const candidates = [];
+    const warnings = [];
     const candidate = (type, attribute, reason) => ({ kind: 'cli', recipe: { backend: 'nix', source: { ...value, type, attribute } }, reason });
     // ponytail: flake detection offers the default package; enumerate variants when selection is supported.
     if (!value.subpath && tree.some(entry => entry.path === 'flake.nix' && entry.type === 'blob' && ['100644', '100755'].includes(entry.mode))) {
       candidates.push(candidate('flake', '', 'Repository flake takes priority on NixOS.'));
     }
-    const packages = await nixJSON(['search', '--json', 'nixpkgs', '(' + value.githubUrl.split('/').at(-1).replaceAll('.', '[._-]') + ')']);
+    let packages = {};
+    try { packages = await nixJSON(['search', '--json', 'nixpkgs', '(' + value.githubUrl.split('/').at(-1).replaceAll('.', '[._-]') + ')']); }
+    catch (error) { warnings.push(`Could not search nixpkgs: ${error.message}`); }
     for (const key of Object.keys(packages)) {
       const attribute = key.replace(/^legacyPackages\.[^.]+\./, '');
       if (!validAttribute(attribute)) continue;
-      const meta = await nixJSON(['eval', '--json', `nixpkgs#${attribute}`, '--apply', 'p: { homepage = p.meta.homepage or null; changelog = p.meta.changelog or null; sourceUrl = p.src.url or null; }']);
+      let meta;
+      try { meta = await nixJSON(['eval', '--json', `nixpkgs#${attribute}`, '--apply', 'p: { homepage = p.meta.homepage or null; changelog = p.meta.changelog or null; sourceUrl = p.src.url or null; }']); }
+      catch (error) { warnings.push(`Could not inspect nixpkgs ${attribute}: ${error.message}`); continue; }
       const urls = [meta.homepage, meta.changelog, meta.sourceUrl].flat();
       if (urls.some(url => typeof url === 'string' && (url.toLowerCase().replace(/\/$/, '').replace(/\.git$/, '') === value.githubUrl || url.toLowerCase().startsWith(value.githubUrl + '/')))) {
         candidates.push(candidate('nixpkgs', attribute, 'Matching nixpkgs package is preferred after the repository flake on NixOS.'));
       }
     }
-    return { candidates, version };
+    return { candidates, version, warnings };
   }
 
   async function plan(body) {
@@ -187,19 +196,24 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       if (body.recipe?.backend === 'nix') {
         const selected = nixSource(body.recipe.source);
         if (JSON.stringify(source(selected)) !== JSON.stringify(value)) throw new InstallerError('INVALID_INPUT', 'Recipe must belong to the selected Card.');
-        const { candidates, version: repoVersion } = await detect(value);
-        if (!candidates.some(candidate => JSON.stringify(candidate.recipe.source) === JSON.stringify(selected))) throw new InstallerError('INVALID_INPUT', 'Choose a detected Nix Recipe.');
+        const { candidates, version: repoVersion, warnings } = await detect(value);
+        if (!candidates.some(candidate => JSON.stringify(candidate.recipe.source) === JSON.stringify(selected))) {
+          if (warnings.length) throw new InstallerError('SOURCE_ERROR', warnings.join('\n'));
+          throw new InstallerError('INVALID_INPUT', 'Choose a detected Nix Recipe.');
+        }
         const id = componentId(selected);
         if (saved.receipts.some(item => item.id === id)) throw new InstallerError('CONFLICT', 'Component is already installed.');
         const version = selected.type === 'flake' ? repoVersion : (await nixJSON(['flake', 'metadata', '--json', 'nixpkgs'])).locked?.rev;
         if (!/^[\da-f]{40}$/.test(version)) throw new InstallerError('SOURCE_ERROR', 'Nix returned an invalid revision.');
         receipt = { id, kind: 'cli', recipe: { backend: 'nix', source: selected }, version, storePath: storePath(id, version, 'cli'), installedAt: new Date(now()).toISOString() };
-        const metadata = await nixJSON(['eval', '--json', installable(receipt), '--apply', 'p: { mainProgram = p.meta.mainProgram or null; pname = p.pname or null; outputName = (p.bin or p).outputName or "out"; }']);
+        const metadata = await nixJSON(['eval', '--json', installable(receipt), '--apply', 'p: { mainProgram = p.meta.mainProgram or null; pname = p.pname or null; outputName = (p.bin or p).outputName or "out"; outputPath = (p.bin or p).outPath; }']);
         const name = metadata.mainProgram ?? metadata.pname ?? value.githubUrl.split('/').at(-1);
         if (!validName(name)) throw new InstallerError('INVALID_SOURCE', 'Nix package has an invalid CLI name.');
         receipt.name = name;
         receipt.outputName = metadata.outputName ?? 'out';
         if (!validName(receipt.outputName)) throw new InstallerError('INVALID_SOURCE', 'Nix package has an invalid output name.');
+        receipt.outputPath = metadata.outputPath;
+        if (typeof receipt.outputPath !== 'string' || !path.isAbsolute(receipt.outputPath)) throw new InstallerError('INVALID_SOURCE', 'Nix returned an invalid output path.');
         receipt.storePath = storePath(id, version, 'cli', receipt.outputName);
         receipt.recipe.binary = name;
         receipt.activations = { cli: { path: path.join(cliDirectory(), name) } };
@@ -235,15 +249,25 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     await mkdir(path.dirname(receipt.storePath), { recursive: true, mode: 0o700 });
     try {
       await run('nix', ['build', `${installable(receipt)}^${receipt.outputName}`, '--out-link', storePath(receipt.id, receipt.version, 'cli')], { timeout: 10 * 60 * 1000, maxBuffer: 4 * 1024 * 1024 });
-      const info = await optionalStat(receipt.storePath);
-      if (!info?.isSymbolicLink()) throw new InstallerError('INVALID_SOURCE', 'Nix did not create an out-link.');
-      receipt.outputPath = await readlink(receipt.storePath);
-      if (!path.isAbsolute(receipt.outputPath)) throw new InstallerError('INVALID_SOURCE', 'Nix returned a relative output path.');
+      await checkStore(receipt);
       const binary = await stat(path.join(receipt.storePath, 'bin', receipt.name));
       if (!binary.isFile() || !(binary.mode & 0o111)) throw new InstallerError('INVALID_SOURCE', 'Nix output does not contain the executable CLI.');
     } catch (error) {
-      if ((await optionalStat(receipt.storePath))?.isSymbolicLink()) await unlink(receipt.storePath);
+      await removeStore(receipt);
       throw error;
+    }
+  }
+
+  async function removeStore(receipt, target = receipt.storePath) {
+    await checkParents(target);
+    const info = await optionalStat(target);
+    if (!info) return;
+    if (receipt.kind === 'cli') {
+      if (!info.isSymbolicLink() || await readlink(target) !== receipt.outputPath) conflict(target);
+      await unlink(target);
+    } else {
+      if (!info.isDirectory()) conflict(target);
+      await rm(target, { recursive: true });
     }
   }
 
@@ -321,7 +345,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
             for (const target of removed) await createActivation(receipt, target);
             throw error;
           }
-          await rm(quarantine, { recursive: true });
+          await removeStore(receipt, quarantine);
           return { ok: true };
         }
         const agent = receipt.kind === 'cli' ? 'cli' : approved.agent;
@@ -358,9 +382,9 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     } catch (error) {
       for (const target of created) {
         const info = await optionalStat(target);
-        if (info && (receipt.kind === 'cli' ? info.isFile() && await readFile(target, 'utf8') === wrapper(receipt) : info.isSymbolicLink() && await readlink(target) === receipt.storePath)) await unlink(target);
+        if (info && await ownsActivation(receipt, target, info)) await unlink(target);
       }
-      if (installed) await rm(receipt.storePath, { recursive: true, force: true });
+      if (installed) await removeStore(receipt);
       throw error;
     } finally { executing = false; }
   }

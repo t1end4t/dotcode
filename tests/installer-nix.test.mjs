@@ -27,7 +27,10 @@ async function fixture(t, options = {}) {
       return { stdout: JSON.stringify({ 'legacyPackages.x86_64-linux.hello': { pname: 'hello', version: '1.0' } }) };
     }
     if (args[0] === 'flake') return { stdout: JSON.stringify({ locked: { type: 'github', owner: 'NixOS', repo: 'nixpkgs', rev: nixpkgsRevision } }) };
-    if (args[0] === 'eval') return { stdout: JSON.stringify({ homepage: githubUrl, mainProgram: 'hello', pname: 'hello', outputName: options.outputName ?? 'out', ...options.metadata }) };
+    if (args[0] === 'eval') {
+      if (options.metadataError && args.some(arg => arg.startsWith('nixpkgs#'))) throw new Error('package evaluation failed');
+      return { stdout: JSON.stringify({ homepage: githubUrl, mainProgram: 'hello', pname: 'hello', outputName: options.outputName ?? 'out', outputPath: output, ...options.metadata }) };
+    }
     if (args[0] === 'build') {
       await mkdir(path.join(output, 'bin'), { recursive: true });
       await writeFile(path.join(output, 'bin/hello'), '#!/bin/sh\nprintf "%s\\n" "$@"\n', { mode: 0o755 });
@@ -70,6 +73,17 @@ test('Detector matches package source URLs and rejects unrelated packages with t
   assert.equal((await related.installer.detect({ githubUrl })).candidates.length, 1);
   const unrelated = await fixture(t, { flake: false, metadata: { homepage: githubUrl + '-other' } });
   assert.deepEqual((await unrelated.installer.detect({ githubUrl })).candidates, []);
+});
+
+test('flake candidates remain installable when nixpkgs search or a package evaluation fails', async t => {
+  for (const options of [{ searchError: true }, { metadataError: true }]) {
+    const { installer, install } = await fixture(t, options);
+    const { candidates, warnings } = await installer.detect({ githubUrl });
+    assert.deepEqual(candidates.map(candidate => candidate.recipe.source.type), ['flake']);
+    assert.match(warnings[0], /nixpkgs|package evaluation/);
+    await install();
+    assert.equal((await installer.snapshot()).receipts[0].status, 'enabled');
+  }
 });
 
 test('install pins a flake commit, roots its output in Store and creates a working owned wrapper and Receipt', async t => {
@@ -222,4 +236,19 @@ test('failed builds, missing binaries and conflicts during build leave no Receip
     if (failure === 'wrapper') assert.equal(await readFile(path.join(home, '.local/bin/hello'), 'utf8'), 'user file');
     else await assert.rejects(readFile(path.join(home, '.local/bin/hello')), { code: 'ENOENT' });
   }
+});
+
+test('failed builds preserve a foreign symlink substituted for the expected out-link', async t => {
+  let target;
+  const { installer, install, home } = await fixture(t, {
+    afterBuild: async ({ outLink, home }) => {
+      target = outLink;
+      await rm(outLink);
+      await symlink(home, outLink);
+      throw new Error('build failed');
+    },
+  });
+  await assert.rejects(install(), { code: 'CONFLICT' });
+  assert.equal(await readlink(target), home);
+  assert.deepEqual((await installer.snapshot()).receipts, []);
 });

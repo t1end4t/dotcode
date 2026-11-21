@@ -173,6 +173,8 @@ with `{ "githubUrl": "https://github.com/owner/repo" }` returns ordered
 `candidates` with a `recipe` and ranking `reason`: the repository's default
 flake package first, then nixpkgs packages whose source or metadata matches
 the repository. Variant selection is not implemented yet.
+Discovery failures are returned in `warnings`; a failed nixpkgs lookup does
+not prevent installing a detected flake.
 
 Pass the chosen `recipe`, the same `githubUrl`, and `action: "install"` to
 `POST /api/installer/plan`, then pass the returned `id` as `planId` to
