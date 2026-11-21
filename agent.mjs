@@ -461,6 +461,12 @@ export function attachAgent(app, {
     try { res.json(await installer.snapshot()); }
     catch (error) { installerFailure(res, error); }
   });
+  app.post('/api/installer/detect', async (req, res) => {
+    busy = true;
+    try { res.json(await installer.detect(req.body)); }
+    catch (error) { installerFailure(res, error); }
+    finally { busy = false; }
+  });
   app.post('/api/installer/plan', async (req, res) => {
     busy = true;
     try {
