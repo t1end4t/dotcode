@@ -8,7 +8,7 @@ import express from 'express';
 import { attachAgent } from '../agent.mjs';
 
 const commit = 'a'.repeat(40);
-const metadata = { full_name: 'example/review', name: 'review', description: 'Review code.', language: 'TypeScript', stargazers_count: 42, topics: ['code-review'] };
+const metadata = { full_name: 'example/review', name: 'review', description: 'Review code.', language: 'TypeScript', stargazers_count: 42, topics: ['code-review'], owner: { avatar_url: 'https://avatars.githubusercontent.com/u/42?v=4' } };
 async function fixture(t, options = {}) {
   const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-search-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -21,7 +21,7 @@ async function fixture(t, options = {}) {
       : url.endsWith('/releases/latest') ? { published_at: '2026-11-20T12:00:00Z', assets: [] } : metadata;
     return Response.json(body);
   }, ...options });
-  return { installer, requests };
+  return { installer, requests, directory };
 }
 
 test('search returns repository metadata, release date, Detector badges and an anonymous warning', async t => {
@@ -40,6 +40,7 @@ test('search returns repository metadata, release date, Detector badges and an a
   assert.equal(card.detection.commit, commit);
   assert.ok(Number.isFinite(Date.parse(card.detection.checkedAt)));
   assert.equal(card.category, 'Skills');
+  assert.equal(card.iconUrl, 'https://avatars.githubusercontent.com/u/42?v=4');
   assert.ok(requests.every(([url, options]) => new URL(url).origin === 'https://api.github.com' && options.redirect === 'error'));
 });
 
@@ -147,6 +148,7 @@ test('HTTP Add persists Detector metadata, deduplicates canonical repos and neve
   assert.equal(response.status, 201);
   const { item } = await response.json();
   assert.equal(item.category, 'Skills');
+  assert.equal(item.iconUrl, 'https://avatars.githubusercontent.com/u/42?v=4');
   assert.deepEqual(item.detection.badges, ['Skill']);
   assert.equal((await add('https://github.com/example/review')).status, 200);
   const saved = await (await fetch(base + '/api/catalog')).json();
@@ -156,6 +158,26 @@ test('HTTP Add persists Detector metadata, deduplicates canonical repos and neve
   assert.doesNotMatch(JSON.stringify(await (await fetch(base + '/api/installer')).json()), /http-test-secret/);
   assert.equal((await add('https://example.com/repo')).status, 400);
   assert.equal((await fetch(base + '/api/catalog/cards', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://evil.example' }, body: JSON.stringify({ githubUrl: item.githubUrl }) })).status, 403);
+});
+
+test('saved Cards preserve explicit Kind and GitHub icons and reject unsupported metadata', async t => {
+  const { installer, directory } = await fixture(t);
+  const card = { ...await installer.inspect('https://github.com/example/review'), kind: 'desktop-app', iconUrl: 'https://raw.githubusercontent.com/example/review/main/icon.png' };
+  const app = express().use(express.json());
+  const stop = attachAgent(app, { directory });
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  t.after(async () => { await stop(); await new Promise(resolve => server.close(resolve)); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const save = item => fetch(base + '/api/catalog', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: [item] }) });
+  for (const invalid of [
+    { ...card, kind: 'anything' },
+    ...['javascript:alert(1)', 'https://example.com/icon.png', 'https://raw.githubusercontent.com.evil.test/icon.png', 'https://user:secret@raw.githubusercontent.com/example/review/main/icon.png'].map(iconUrl => ({ ...card, iconUrl })),
+  ]) {
+    assert.equal((await save(invalid)).status, 400);
+  }
+  assert.equal((await save(card)).status, 200);
+  assert.deepEqual((await (await fetch(base + '/api/catalog')).json()).items, [card]);
 });
 
 test('Install reuses saved detection for 24 hours, then refreshes and persists it before planning', async t => {

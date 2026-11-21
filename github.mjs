@@ -82,6 +82,7 @@ export function createGithub({ fetchRemote = globalThis.fetch, run = promisify(e
       id: repo.replace('/', '--'), name: repo.split('/')[1], repo, githubUrl: `https://github.com/${repo}`,
       category, categoryLabel: category, description: typeof metadata.description === 'string' ? metadata.description : '',
       tags: topics, primaryLanguage: metadata.language || 'Unknown', stars: metadata.stargazers_count ?? 0,
+      ...(/^https:\/\/avatars\.githubusercontent\.com\//.test(metadata.owner?.avatar_url) && { iconUrl: metadata.owner.avatar_url }),
       defaultInstallCommand: '', customNotes: '', customCommand: '', ...result,
     };
   }

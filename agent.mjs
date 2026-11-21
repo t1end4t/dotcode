@@ -94,6 +94,8 @@ function validateCatalog(items) {
       catalogFields.every(field => typeof item[field] === 'string' && item[field].length <= 16000) && item.id.trim() && item.name.trim() &&
       item.category.trim() && item.category.length <= 80 && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(item.githubUrl) &&
       Array.isArray(item.tags) && item.tags.length <= 50 && item.tags.every(tag => typeof tag === 'string' && tag.length <= 100) &&
+      (item.kind === undefined || ['cli', 'desktop-app', 'skill', 'mcp'].includes(item.kind)) &&
+      (item.iconUrl === undefined || typeof item.iconUrl === 'string' && item.iconUrl.length <= 2048 && /^https:\/\/(?:avatars|raw)\.githubusercontent\.com\//.test(item.iconUrl)) &&
       (item.stars === undefined || Number.isSafeInteger(item.stars) && item.stars >= 0) &&
       (item.latestReleaseAt == null || typeof item.latestReleaseAt === 'string' && Number.isFinite(Date.parse(item.latestReleaseAt))) &&
       (item.detection === undefined || item.detection &&
@@ -103,7 +105,7 @@ function validateCatalog(items) {
         Array.isArray(item.detection.skillPaths) && item.detection.skillPaths.length <= 10000 && item.detection.skillPaths.every(value => typeof value === 'string' && value.length <= 1000 && !value.includes('\\') && !value.startsWith('/') && !value.split('/').some(part => ['.', '..'].includes(part)))) ) ||
       new Set(items.map(item => item.id)).size !== items.length ||
       new Set(items.map(item => catalogKey(item.githubUrl))).size !== items.length) throw new Error('Invalid catalog. File unchanged.');
-  return items.map(item => ({ ...Object.fromEntries([...catalogFields, 'stars', 'latestReleaseAt'].filter(field => item[field] !== undefined).map(field => [field, item[field]])), tags: item.tags,
+  return items.map(item => ({ ...Object.fromEntries([...catalogFields, 'stars', 'latestReleaseAt', 'kind', 'iconUrl'].filter(field => item[field] !== undefined).map(field => [field, item[field]])), tags: item.tags,
     ...(item.detection && { detection: { checkedAt: item.detection.checkedAt, commit: item.detection.commit, badges: item.detection.badges, skillPaths: item.detection.skillPaths, ...(item.detection.error && { error: item.detection.error }) } }),
   }));
 }
@@ -162,7 +164,7 @@ async function discoverInstallations(directory, installations) {
     const key = item.githubUrl.toLowerCase().replace(/\/$/, '');
     const previous = observed.get(key);
     const owned = previous && (previous.location === location ||
-      (/nix/i.test(previous.method) && contains(path.dirname(location), previous.location)));
+      (/nix/i.test(previous.method) && contains(location, previous.location)));
     let manifest;
     try {
       if (!contains(workspace, await realpath(path.dirname(location)))) continue;

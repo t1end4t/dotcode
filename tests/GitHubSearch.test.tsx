@@ -15,9 +15,10 @@ test('GitHub search exposes a labelled keyword/URL input and a search action wit
 });
 
 test('results show all requested metadata, Detector badges and duplicate-safe Add buttons', () => {
-  const result = { ...INITIAL_ITEMS[0], stars: 42, latestReleaseAt: '2026-11-20T12:00:00Z', detection: { checkedAt: '2026-11-21T12:00:00Z', commit: 'a'.repeat(40), badges: ['Skill'], skillPaths: [''] } };
+  const result = { ...INITIAL_ITEMS[0], iconUrl: 'https://avatars.githubusercontent.com/u/42?v=4', stars: 42, latestReleaseAt: '2026-11-20T12:00:00Z', detection: { checkedAt: '2026-11-21T12:00:00Z', commit: 'a'.repeat(40), badges: ['Skill'], skillPaths: [''] } };
   const html = renderToStaticMarkup(<GitHubResults results={[result]} items={[]} adding="" onAdd={() => {}} />);
   for (const text of [result.repo, result.description, result.primaryLanguage, '42 stars', 'Skill', '2026-11-20', `Add ${result.repo} to Library`]) assert.ok(html.includes(text), text);
+  assert.ok(html.includes('<img src="https://avatars.githubusercontent.com/u/42?v=4"'));
   const added = renderToStaticMarkup(<GitHubResults results={[result]} items={[{ ...result, githubUrl: result.githubUrl.toUpperCase() + '.git/' }]} adding="" onAdd={() => {}} />);
   assert.match(added, /disabled=""/);
   assert.match(added, /In Library/);
