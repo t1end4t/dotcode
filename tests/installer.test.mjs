@@ -223,7 +223,7 @@ test('Detector uses GitHub CLI credentials when GITHUB_TOKEN is absent, without 
   const { installer } = await fixture(t, {
     run: async (program, args) => {
       assert.equal(program, 'gh');
-      assert.deepEqual(args, ['auth', 'token']);
+      assert.deepEqual(args, ['auth', 'token', '--hostname', 'github.com']);
       return { stdout: 'private-test-token\n' };
     },
     fetchRemote: async (url, options) => {

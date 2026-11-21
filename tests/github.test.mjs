@@ -48,7 +48,7 @@ test('repository URLs return exactly one result and invalid URLs never reach Git
   assert.equal((await installer.search('https://github.com/Example/Review.git/')).results.length, 1);
   assert.ok(!requests.some(([url]) => url.includes('/search/')));
   const before = requests.length;
-  for (const url of ['https://example.com/repo', 'https://github.com/a/b/issues', 'https://user:secret@github.com/a/b', 'http://github.com/a/b', 'https://github.com/a/..', 'https://github.com/a/b?token=secret']) {
+  for (const url of ['https://example.com/repo', 'https://github.com/a/b/issues', 'https://user:secret@github.com/a/b', 'http://github.com/a/b', 'https://github.com/a/..', 'https://github.com/a/b?token=secret', 'git@github.com:owner/repo.git', '//github.com/owner/repo']) {
     await assert.rejects(installer.search(url), /GitHub repository URL/);
   }
   assert.equal(requests.length, before);
@@ -81,8 +81,8 @@ test('credentials prefer the environment, fall back to gh, and never enter resul
     let ghCalls = 0;
     const headers = [];
     const { installer } = await fixture(t, {
-      env: useEnvironment ? { GITHUB_TOKEN: 'env-secret' } : {},
-      run: async (program, args) => { ghCalls++; assert.equal(program, 'gh'); assert.deepEqual(args, ['auth', 'token']); return { stdout: 'gh-secret\n' }; },
+      env: useEnvironment ? { GITHUB_TOKEN: 'env-secret' } : { GH_HOST: 'github.example.com' },
+      run: async (program, args) => { ghCalls++; assert.equal(program, 'gh'); assert.deepEqual(args, ['auth', 'token', '--hostname', 'github.com']); return { stdout: 'gh-secret\n' }; },
       fetchRemote: async (url, options) => {
         assert.equal(new URL(url).origin, 'https://api.github.com');
         headers.push(options.headers.authorization);

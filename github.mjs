@@ -13,7 +13,7 @@ export function githubRepo(value) {
 export function createGithub({ fetchRemote = globalThis.fetch, run = promisify(execFile), now = Date.now, env = process.env } = {}) {
   const token = async () => {
     if (env.GITHUB_TOKEN?.trim()) return env.GITHUB_TOKEN.trim();
-    try { return (await run('gh', ['auth', 'token'], { timeout: 10000, maxBuffer: 8192 })).stdout.trim(); }
+    try { return (await run('gh', ['auth', 'token', '--hostname', 'github.com'], { timeout: 10000, maxBuffer: 8192 })).stdout.trim(); }
     catch { return ''; }
   };
   async function request(endpoint, credential, optional = false) {
@@ -93,7 +93,7 @@ export function createGithub({ fetchRemote = globalThis.fetch, run = promisify(e
       if (typeof query !== 'string' || !query.trim() || query.length > 256) throw Object.assign(new Error('Enter a search keyword or GitHub repository URL (up to 256 characters).'), { code: 'INVALID_INPUT' });
       query = query.trim();
       const shorthand = /^[a-z\d-]{1,39}\/[\w.-]{1,100}\/?$/i.test(query);
-      const isUrl = /^[a-z][a-z\d+.-]*:\/|^https?:|^(?:www\.)?github\./i.test(query);
+      const isUrl = /^[a-z][a-z\d+.-]*:\/|^https?:|^(?:www\.)?github\.|^git@|^\/\//i.test(query);
       const repo = shorthand ? githubRepo(`https://github.com/${query}`) : isUrl ? githubRepo(query) : null;
       const credential = await token();
       let results;
