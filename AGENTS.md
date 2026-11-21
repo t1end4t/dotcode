@@ -1,4 +1,5 @@
-Use `direnv exec . <command>` to run development commands in the repo environment.
+Use `direnv exec . <command>` for development commands; direnv provides the repo's tools and dependencies.
+Before installing a missing tool, check it inside direnv and inspect `flake.nix`.
 
 ## Agent skills
 
