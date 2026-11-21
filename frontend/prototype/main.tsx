@@ -1,14 +1,19 @@
-// Isolated UI prototype: in-memory fixtures, no application API or machine changes.
+// The app uses the Library UI with persisted Cards; standalone prototype mode keeps its fixtures.
 // ponytail: one Component per Card; add Component rows when exploring multi-Component repos.
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowRight, ArrowUpRight, BookOpen, Check, ChevronDown, Download, Github, MessageSquare, Monitor, PanelRightClose, PanelRightOpen, Plus, Search, Star, Loader2, Terminal, X } from "lucide-react";
 import "./prototype.css";
+import { useCatalog } from "../src/useCatalog";
+import { SkillControls } from "../src/installer";
+import { GitHubSearch } from "../src/components/GitHubSearch";
+import type { ManageableItem } from "../src/data/items";
 
 type Card = {
   name: string; repo: string; kind: "cli" | "desktop-app" | "skill" | "mcp" | "unknown";
   description: string; backend: string; version: string; state: "available" | "enabled" | "disabled";
   avatar?: string; language?: string;
+  source?: ManageableItem;
 };
 type GitHubRepo = { repo: string; name: string; description: string; avatar?: string; language?: string; stars: number };
 type Action = "install" | "enable" | "disable" | "uninstall";
@@ -86,8 +91,21 @@ const icons = { cli: Terminal, "desktop-app": Monitor, skill: BookOpen, mcp: Mes
 const actionLabels = { install: "Install", enable: "Enable", disable: "Disable", uninstall: "Uninstall" };
 type Message = { role: "user" | "assistant"; text: string };
 
-function Prototype() {
-  const [cards, setCards] = useState(initialCards);
+function ConnectedLibrary() {
+  const catalog = useCatalog();
+  return <Prototype catalog={catalog} />;
+}
+
+function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
+  const [demoCards, setCards] = useState(initialCards);
+  const cards: Card[] = catalog ? catalog.items.map(item => {
+    const badges = item.detection?.badges ?? [];
+    const receipts = item.installedSkills ?? [];
+    const kind: Card["kind"] = receipts.length || badges.includes("Skill") ? "skill" : badges.includes("MCP") ? "mcp" : badges.includes("AppImage") ? "desktop-app" : badges.some(badge => ["npm CLI", "Nix flake"].includes(badge)) ? "cli" : "unknown";
+    return { name: item.name, repo: item.repo, description: item.description, kind, language: item.primaryLanguage,
+      backend: receipts[0]?.recipe.backend ?? "—", version: item.currentVersion ?? "—",
+      state: !item.installed ? "available" : receipts.length && receipts.every(receipt => receipt.status === "disabled") ? "disabled" : "enabled", source: item };
+  }) : demoCards;
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
   const [status, setStatus] = useState("all");
@@ -101,6 +119,7 @@ function Prototype() {
   const [repoError, setRepoError] = useState("");
   const [repoInvalid, setRepoInvalid] = useState(false);
   const [repoLoading, setRepoLoading] = useState(false);
+  const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [repoResults, setRepoResults] = useState<GitHubRepo[] | null>(null);
   const searchRequest = useRef<AbortController | null>(null);
   const uninstallDialog = useRef<HTMLDialogElement>(null);
@@ -146,7 +165,7 @@ function Prototype() {
     setRepoInput(value); setRepoError(""); setRepoInvalid(false); setRepoLoading(false); setRepoResults(null);
   };
   const closeDiscovery = () => {
-    searchRequest.current?.abort(); setRepoLoading(false); addDialog.current?.close();
+    searchRequest.current?.abort(); setRepoLoading(false); setDiscoveryOpen(false); addDialog.current?.close();
   };
   const searchGitHub = async (value = repoInput) => {
     searchRequest.current?.abort();
@@ -212,15 +231,16 @@ function Prototype() {
     </header>
     <div className="workspace">
       <main id="library" className="library" tabIndex={-1}>
-        <div className="library-heading"><div><h1>Library</h1><p>{cards.length} repositories <span> / </span> {installed} installed</p></div><button className="button primary" onClick={() => { editRepoQuery(""); setAnnouncement(""); addDialog.current?.showModal(); }}><Plus size={16} />Add repository</button></div>
+        <div className="library-heading"><div><h1>Library</h1><p>{cards.length} repositories <span> / </span> {installed} installed</p></div><button className="button primary" onClick={() => { editRepoQuery(""); setDiscoveryOpen(true); setAnnouncement(""); addDialog.current?.showModal(); }}><Plus size={16} />Add repository</button></div>
         <div className="toolbar"><div className="status-tabs" role="group" aria-label="Installation status">{[["all", "All repositories", cards.length], ["installed", "Installed", installed], ["available", "Not installed", cards.length - installed]].map(([value, label, count]) => <button key={value} aria-pressed={status === value} className={status === value ? "active" : ""} onClick={() => setStatus(String(value))}>{label}<span>{count}</span></button>)}</div><div className="search-filters"><label className="search"><Search size={15} /><span className="sr-only">Search Library</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search repositories…" /></label><label className="kind-filter"><span className="sr-only">Kind</span><select value={kind} onChange={event => setKind(event.target.value)}><option value="all">All kinds</option>{Object.entries(kindLabels).filter(([value]) => value !== "unknown" || cards.some(card => card.kind === "unknown")).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={13} /></label></div></div>
-        {visible.length ? <div className="card-grid">{visible.map(card => { const Icon = icons[card.kind]; return <article key={card.repo} className={`tool-card ${contextRepo === card.repo && chatOpen ? "in-context" : ""}`} aria-label={card.name}>
+        {catalog?.inventoryError && <p role="alert" className="library-error">{catalog.inventoryError}</p>}
+        {catalog && !catalog.catalogLoaded ? <p role="status">Loading Library…</p> : visible.length ? <div className="card-grid">{visible.map(card => { const Icon = icons[card.kind]; return <article key={card.repo} className={`tool-card ${contextRepo === card.repo && chatOpen ? "in-context" : ""}`} aria-label={card.name}>
           <header className="card-heading"><span className="owner-avatar">{card.avatar ? <img src={card.avatar + "&s=80"} width="32" height="32" alt="" /> : <Github size={26} />}</span><div className="card-identity"><h2><a href={`https://github.com/${card.repo}`} target="_blank" rel="noreferrer">{card.name}<span className="sr-only"> (opens in a new tab)</span></a></h2><a className="owner" href={`https://github.com/${card.repo}`} target="_blank" rel="noreferrer"><span>{card.repo.split("/")[0]}</span><ArrowUpRight size={12} /><span className="sr-only"> (opens in a new tab)</span></a></div><span className="kind-label"><Icon size={12} />{kindLabels[card.kind]}</span></header>
           <p className="card-description">{card.description}</p>
           <div className="card-installation"><span className={`status ${card.state}`}><span className="status-dot" />{stateLabels[card.state]}</span><span className="version">{card.state !== "available" ? <><code>{card.version}</code><span>{card.backend}</span></> : card.language || "Details unavailable"}</span></div>
-          <footer className="card-actions"><button className="text-button ask-ai" onClick={() => askAbout(card)} aria-label={`Ask assistant about ${card.name}`}><MessageSquare size={14} />Ask assistant</button><div>{card.state === "available" ? <button className="button install-button" disabled={card.backend === "—"} title={card.backend === "—" ? "Installation details are unavailable in this prototype" : undefined} aria-label={`Install ${card.name}`} onClick={() => act(card, "install")}><Download size={14} />Install</button> : <><button className="text-button uninstall-button" aria-label={`Uninstall ${card.name}`} onClick={event => requestUninstall(card, event.currentTarget)}>Uninstall</button><button className="enable-switch" role="switch" aria-checked={card.state === "enabled"} aria-label={`Enable ${card.name}`} onClick={() => act(card, card.state === "enabled" ? "disable" : "enable")}><span className="sr-only">{card.state === "enabled" ? "Enabled" : "Disabled"}</span><span className="switch-track"><span /></span></button></>}</div></footer>
+          <footer className="card-actions"><button className="text-button ask-ai" onClick={() => askAbout(card)} aria-label={`Ask assistant about ${card.name}`}><MessageSquare size={14} />Ask assistant</button><div>{card.source && catalog ? <SkillControls item={card.source} onChanged={catalog.refreshCatalog} onLegacyInstall={() => setAnnouncement("This Library currently installs skills only. Other repository installation options are not connected yet.")} /> : card.state === "available" ? <button className="button install-button" disabled={card.backend === "—"} title={card.backend === "—" ? "Installation details are unavailable in this prototype" : undefined} aria-label={`Install ${card.name}`} onClick={() => act(card, "install")}><Download size={14} />Install</button> : <><button className="text-button uninstall-button" aria-label={`Uninstall ${card.name}`} onClick={event => requestUninstall(card, event.currentTarget)}>Uninstall</button><button className="enable-switch" role="switch" aria-checked={card.state === "enabled"} aria-label={`Enable ${card.name}`} onClick={() => act(card, card.state === "enabled" ? "disable" : "enable")}><span className="sr-only">{card.state === "enabled" ? "Enabled" : "Disabled"}</span><span className="switch-track"><span /></span></button></>}</div></footer>
         </article>; })}</div> : <div className="empty"><Search size={24} /><h2>No matching repositories</h2><p>Try another search or clear your filters.</p><button className="button" onClick={() => { setQuery(""); setKind("all"); setStatus("all"); }}>Clear filters</button></div>}
-        <footer className="library-footer"><span><Github size={13} />Repository descriptions from GitHub About.</span><span>Demo installations · reload to reset</span></footer>
+        <footer className="library-footer"><span><Github size={13} />Repository descriptions from GitHub About.</span><span>{catalog ? "Cards saved to Library · assistant preview" : "Demo installations · reload to reset"}</span></footer>
       </main>
       <aside id="assistant" className="assistant" aria-label="Assistant" hidden={!chatOpen} onKeyDown={event => { if (event.key === "Escape") closeChat(); }}>
         <header className="assistant-header"><div><MessageSquare size={16} /><h2>Assistant</h2><span className="demo-label">Demo</span></div><button className="icon-button" onClick={closeChat} aria-label="Close assistant"><PanelRightClose size={17} /></button></header>
@@ -233,7 +253,7 @@ function Prototype() {
     <dialog ref={uninstallDialog} className="dialog" onCancel={closeUninstall}><form method="dialog"><header><h2>Uninstall {uninstallCard?.name}?</h2><button type="button" className="icon-button" onClick={closeUninstall} aria-label="Close dialog"><X size={18} /></button></header><p>The installation will be removed. The repository stays in your Library so you can install it again.</p><p className="dialog-note">Your data and configuration are kept. This is a simulated action.</p><footer><button type="button" className="button" onClick={closeUninstall}>Cancel</button><button className="button danger" onClick={() => { if (uninstallCard) act(uninstallCard, "uninstall"); closeUninstall(); }}>Uninstall</button></footer></form></dialog>
     <dialog ref={addDialog} className="dialog discovery" aria-labelledby="discovery-title" onCancel={closeDiscovery}>
       <header><div><h2 id="discovery-title"><Github size={20} />Add repository</h2><p>Find a public repository and add it to your Library.</p></div><button type="button" className="icon-button" onClick={closeDiscovery} aria-label="Close add repository dialog"><X size={18} /></button></header>
-      <form className="discovery-search" onSubmit={event => { event.preventDefault(); void searchGitHub(); }}><label className="discovery-query"><Search size={17} /><span className="sr-only">Search GitHub</span><input autoFocus id="repo-input" type="search" value={repoInput} onChange={event => editRepoQuery(event.target.value)} placeholder="Search GitHub or paste a repository URL…" maxLength={256} aria-invalid={repoInvalid} aria-describedby={repoInvalid ? "repo-error" : "repo-help"} /></label><button type="submit" className="button primary" disabled={repoLoading}>{repoLoading ? <Loader2 size={15} className="spinner" /> : <Search size={15} />}Search</button></form>
+      {catalog ? discoveryOpen && <GitHubSearch items={catalog.items} onAdded={async () => { await catalog.refreshCatalog(); setQuery(""); setKind("all"); setStatus("all"); }} /> : <><form className="discovery-search" onSubmit={event => { event.preventDefault(); void searchGitHub(); }}><label className="discovery-query"><Search size={17} /><span className="sr-only">Search GitHub</span><input autoFocus id="repo-input" type="search" value={repoInput} onChange={event => editRepoQuery(event.target.value)} placeholder="Search GitHub or paste a repository URL…" maxLength={256} aria-invalid={repoInvalid} aria-describedby={repoInvalid ? "repo-error" : "repo-help"} /></label><button type="submit" className="button primary" disabled={repoLoading}>{repoLoading ? <Loader2 size={15} className="spinner" /> : <Search size={15} />}Search</button></form>
       <p id="repo-help" className="discovery-help">Search by name, owner/repo or GitHub URL. Adding a Card does not install it.</p>
       <div className="discovery-results" aria-busy={repoLoading}>
         {repoLoading ? <div className="discovery-message" role="status"><Loader2 size={24} className="spinner" /><h3>Searching GitHub…</h3><p>Looking for public repositories.</p></div>
@@ -244,9 +264,9 @@ function Prototype() {
             const existing = cards.find(card => card.repo.toLowerCase() === repo.repo.toLowerCase());
             return <article key={repo.repo} className="discovery-result" aria-label={repo.repo}><span className="owner-avatar">{repo.avatar ? <img src={repo.avatar + "&s=80"} width="32" height="32" alt="" /> : <Github size={26} />}</span><div className="discovery-result-body"><h3><a href={`https://github.com/${repo.repo}`} target="_blank" rel="noreferrer">{repo.repo}<ArrowUpRight size={12} /><span className="sr-only"> (opens in a new tab)</span></a></h3><p>{repo.description}</p><div className="discovery-meta">{repo.language && <span>{repo.language}</span>}<span><Star size={12} />{repo.stars.toLocaleString("en-US")}<span className="sr-only"> stars</span></span></div></div><div className="discovery-result-controls">{existing ? <><span className="library-badge"><Check size={13} />In Library</span><span className={`status ${existing.state}`}><span className="status-dot" />{stateLabels[existing.state]}</span></> : <button className="button" aria-label={`Add ${repo.repo} to Library`} onClick={() => addRepo(repo)}><Plus size={14} />Add to Library</button>}</div></article>;
           })}</>}
-      </div><footer><p className="discovery-notice" role="status">{announcement || "Public GitHub search · additions stay in this prototype"}</p><button className="button" onClick={closeDiscovery}>Done</button></footer>
+      </div></>}<footer><p className="discovery-notice" role="status">{announcement || (catalog ? "Add saves a Card without AI or installation." : "Public GitHub search · additions stay in this prototype")}</p><button className="button" onClick={closeDiscovery}>Done</button></footer>
     </dialog>
   </div>;
 }
 
-createRoot(document.getElementById("root")!).render(<Prototype />);
+createRoot(document.getElementById("root")!).render(import.meta.env.MODE === "prototype" ? <Prototype /> : <ConnectedLibrary />);

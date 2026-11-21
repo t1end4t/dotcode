@@ -29,9 +29,9 @@ code { font-family: 'IBM Plex Mono', monospace; }
 .topbar-actions { display: flex; align-items: center; gap: 18px; margin-left: auto; }
 .prototype-label, .demo-label { border: 1px solid #3c3c3c; border-radius: 6px; color: #a9a9a9; padding: 1px 5px; font-size: 11px;  border-color: #ffffff1c; }
 .local-label { display: flex; align-items: center; gap: 7px; color: #8e8e8e; font-size: 12px; }
-.button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 11px; border: 1px solid #424242; border-radius: 8px; background: #272727; color: #e4e4e4; font-size: 13px; font-weight: 500; white-space: nowrap;  border-color: #ffffff24; }
-.button:hover:not(:disabled) { background: #343434; border-color: #646464; }
-.button.primary { background: #e4e4e4; color: #242424; border-color: #e4e4e4; }
+.button, .skill-controls .rt-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 11px; border: 1px solid #424242; border-radius: 8px; background: #272727; color: #e4e4e4; font-size: 13px; font-weight: 500; white-space: nowrap;  border-color: #ffffff24; }
+.button:hover:not(:disabled), .skill-controls .rt-button:hover:not(:disabled) { background: #343434; border-color: #646464; }
+.button.primary, .skill-controls .rt-primary { background: #e4e4e4; color: #242424; border-color: #e4e4e4; }
 .button.primary:hover { background: #fff; border-color: #fff; }
 .assistant-toggle { min-height: 34px; background: transparent; }
 .assistant-toggle.is-active { border-color: #777; background: #333; }
@@ -172,6 +172,15 @@ input::placeholder, textarea::placeholder { color: #818181; }
 .discovery-search > .button { min-height: 42px; }
 .discovery .discovery-help { flex-shrink: 0; margin: 10px 24px 18px; color: #aaa; font-size: 12px; }
 .discovery-results { min-height: 230px; flex: 1; overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid #ffffff10; }
+.connected-discovery { display: flex; flex-direction: column; min-height: 0; }
+.skill-controls { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+.skill-controls > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.skill-controls details { max-width: 220px; color: var(--muted); }
+.skill-controls label { display: flex; flex-direction: column; gap: 6px; }
+.skill-controls input { width: 100%; border: 1px solid #ffffff30; border-radius: 8px; padding: 8px; background: #1a1a1a; color: #eee; }
+.skill-controls [role=alert], .library-error { color: #f0b6ac; }
+.library-error { margin-bottom: 20px; }
+.discovery-result-body > .discovery-detection-error { color: #f0b6ac; font-size: 12px; }
 .discovery-message { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 260px; padding: 30px 24px; text-align: center; color: #a4a4a4; }
 .discovery-message h3 { color: #ddd; font-size: 17px; font-weight: 500; }
 .discovery-message p { margin: 0; font-size: 13px; }

@@ -56,7 +56,7 @@ export function SkillControls({ item, onChanged, onLegacyInstall }: { item: Mana
       else setError(failure instanceof Error ? failure.message : 'Installer request failed.');
     } finally { setWorking(false); }
   };
-  return <div className="flex flex-col gap-2" onClick={event => event.stopPropagation()} aria-busy={working}>
+  return <div className="skill-controls flex flex-col gap-2" onClick={event => event.stopPropagation()} aria-busy={working}>
     {receipts.length ? receipts.map(receipt => <div key={receipt.id} className="flex flex-wrap items-center gap-2">
       <span className="text-xs">{receipt.name}</span>
       {(['codex', 'claude'] as const).map(agent => <button key={agent} type="button" role="switch"
