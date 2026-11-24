@@ -70,3 +70,6 @@ package-lock.json
 .devenv/
 .direnv/
 frontend/dist/
+.scratch/
+.claude/
+docs/research/graphify.md

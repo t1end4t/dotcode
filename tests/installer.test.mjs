@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, readlink, readdir, rm, symlink, writeFile } f
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { createInstaller } from '../installer.mjs';
+import { createInstaller } from '../backend/installer.mjs';
 
 const githubUrl = 'https://github.com/example/skills';
 const commit = 'a'.repeat(40);

@@ -1,30 +1,21 @@
 {
-  "name": "typescript-fullstack-template",
+  "name": "dotcode",
   "private": true,
   "type": "module",
   "scripts": {
-    "prototype": "vite --config frontend/vite.prototype.config.ts",
-    "prototype:check": "tsc --noEmit --strict --skipLibCheck --jsx react-jsx --target ES2022 --module ESNext --moduleResolution Bundler --types vite/client frontend/prototype/main.tsx",
-    "prototype:smoke": "node frontend/prototype/check.mjs",
-    "dev": "tsx watch server.ts",
-    "build": "npm run build -w frontend",
-    "start": "NODE_ENV=production tsx server.ts",
-    "lint": "tsc --noEmit -p frontend/tsconfig.json",
+    "dev": "tsx watch backend/server.ts",
+    "build": "tsc --noEmit -p frontend/tsconfig.json && vite build frontend",
+    "start": "NODE_ENV=production tsx backend/server.ts",
+    "lint": "tsc --noEmit -p frontend/tsconfig.json && tsc -p backend/tsconfig.json",
     "test": "node --import tsx --test tests/*.test.*",
     "test:watch": "node --import tsx --test --watch tests/*.test.*"
   },
-  "workspaces": [
-    "frontend"
-  ],
   "dependencies": {
-    "@openai/codex-sdk": "^0.163.0",
-    "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^4.3.4",
     "express": "^4.21.2",
-    "lucide-react": "^1.59.0",
+    "lucide-react": "^0.475.0",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "tailwindcss": "^4.3.3"
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
