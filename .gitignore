@@ -71,3 +71,5 @@ package-lock.json
 .direnv/
 frontend/dist/
 .scratch/
+.claude/
+docs/research/graphify.md
