@@ -86,7 +86,8 @@ DotCode serves a read-only MCP endpoint at `http://127.0.0.1:3000/mcp`
 | `detect` | Ranked candidate Recipes from the Detector. |
 | `list_components` | Installed Components from Receipts, with Activation status. |
 
-No tool adds Cards, writes Receipts, or installs anything.
+No tool adds Cards, writes Receipts, or installs anything. `search` and `detect`
+may evaluate a repository's flake, which can fetch its source into the Nix store.
 
 Each request needs a loopback connection, a local `Host`, no foreign `Origin`,
 and `Authorization: Bearer <token>`. DotCode creates the token on first start in
@@ -104,10 +105,12 @@ Connect Claude Code:
 
 ```sh
 claude mcp add --transport http dotcode http://127.0.0.1:3000/mcp \
-  --header "Authorization: Bearer $(cat ~/.dotcode/mcp-token)"
+  --header 'Authorization: Bearer ${DOTCODE_MCP_TOKEN}'
+export DOTCODE_MCP_TOKEN="$(cat ~/.dotcode/mcp-token)"   # in the shell that starts claude
 ```
 
-The Claude command stores the token in Claude's config; re-run it after rotating.
+The single quotes keep `${DOTCODE_MCP_TOKEN}` unexpanded, so Claude's config stores
+the reference and reads the token from the environment at startup.
 
 ## Development
 

@@ -6,6 +6,8 @@ const invalid = () => Object.assign(new Error('Use a GitHub repository URL such 
 const nonempty = value => typeof value === 'string' && Boolean(value.trim());
 const hasExport = value => nonempty(value) || Boolean(value && typeof value === 'object' && Object.values(value).some(hasExport));
 const repoTopics = metadata => Array.isArray(metadata?.topics) ? metadata.topics.filter(topic => typeof topic === 'string').slice(0, 50) : [];
+const base64Text = content => Buffer.from(content, 'base64').toString('utf8');
+const repoSummary = (repo, metadata) => ({ repo, githubUrl: `https://github.com/${repo}`, description: typeof metadata?.description === 'string' ? metadata.description : '', stars: metadata?.stargazers_count ?? 0 });
 const releaseDate = release => release === undefined ? undefined : release?.published_at ?? null;
 const releaseLabel = 'the latest GitHub release';
 const isRateLimit = status => status === 403 || status === 429;
@@ -92,7 +94,7 @@ export function createGithub({ fetchRemote = globalThis.fetch, run = promisify(e
     const text = async file => {
       const data = await request(`/repos/${repo}/contents/${file}?ref=${version}`, credential);
       if (typeof data?.content !== 'string') throw new Error(`GitHub returned an invalid ${file}.`);
-      return Buffer.from(data.content, 'base64').toString('utf8');
+      return base64Text(data.content);
     };
     const manifest = async file => {
       const contents = await text(file);
@@ -174,9 +176,8 @@ export function createGithub({ fetchRemote = globalThis.fetch, run = promisify(e
     const badges = result.detection.badges;
     const category = badges.includes('Skill') ? 'Skills' : badges.includes('MCP') ? 'MCP servers' : badges.includes('AppImage') ? 'Desktop apps' : badges.includes('npm CLI') || badges.includes('Nix flake') ? 'Developer tools' : badges.includes('Hook') ? 'Hooks' : badges.includes('Library') ? 'Libraries' : topics[0] || 'Other';
     return {
-      id: repo.replace('/', '--'), name: repo.split('/')[1], repo, githubUrl: `https://github.com/${repo}`,
-      category, categoryLabel: category, description: typeof metadata.description === 'string' ? metadata.description : '',
-      tags: topics, primaryLanguage: metadata.language || 'Unknown', stars: metadata.stargazers_count ?? 0,
+      id: repo.replace('/', '--'), name: repo.split('/')[1], ...repoSummary(repo, metadata),
+      category, categoryLabel: category, tags: topics, primaryLanguage: metadata.language || 'Unknown',
       ...(/^https:\/\/avatars\.githubusercontent\.com\//.test(metadata.owner?.avatar_url) && { iconUrl: metadata.owner.avatar_url }),
       defaultInstallCommand: '', customNotes: '', customCommand: '', ...result,
     };
@@ -189,10 +190,9 @@ export function createGithub({ fetchRemote = globalThis.fetch, run = promisify(e
       const repo = githubRepo(githubUrl);
       const credential = await token();
       const [metadata, readme] = await Promise.all([request(`/repos/${repo}`, credential), request(`/repos/${repo}/readme`, credential, true)]);
-      const text = typeof readme?.content === 'string' ? Buffer.from(readme.content, 'base64').toString('utf8') : null;
+      const text = typeof readme?.content === 'string' ? base64Text(readme.content) : null;
       return {
-        repo: { repo, githubUrl: `https://github.com/${repo}`, description: metadata?.description ?? '', topics: repoTopics(metadata), primaryLanguage: metadata?.language ?? null,
-          stars: metadata?.stargazers_count ?? 0, license: metadata?.license?.spdx_id ?? null, homepage: metadata?.homepage || null, archived: Boolean(metadata?.archived), pushedAt: metadata?.pushed_at ?? null },
+        repo: { ...repoSummary(repo, metadata), topics: repoTopics(metadata), primaryLanguage: metadata?.language ?? null, license: metadata?.license?.spdx_id ?? null, homepage: metadata?.homepage || null, archived: Boolean(metadata?.archived), pushedAt: metadata?.pushed_at ?? null },
         // ponytail: README capped at 100k characters; page it when agents need longer docs.
         readme: text === null ? null : text.slice(0, 100000),
       };

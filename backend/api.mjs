@@ -174,6 +174,10 @@ export function attachApi(app, {
   const token = prepare().then(() => mcpToken(path.join(directory, 'mcp-token')));
   token.catch(error => console.error(`DotCode MCP disabled: ${error.message}`));
   const githubUrlSchema = { type: 'string', description: 'GitHub repository URL, e.g. https://github.com/owner/repo' };
+  const whenIdle = call => args => {
+    if (busy || initializingCatalog) throw new Error('Another task is running. Wait for it to finish.');
+    return call(args);
+  };
   attachMcp(app, { isLocal: isLocalRequest, token, tools: [
     { name: 'search', description: 'Search GitHub repositories (or inspect one URL / owner/repo) with Detector badges, like DotCode Search.',
       inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
@@ -181,16 +185,16 @@ export function attachApi(app, {
     { name: 'repo_info', description: 'Read GitHub metadata and README for a repository, plus its Library Card if the user added one.',
       inputSchema: { type: 'object', properties: { githubUrl: githubUrlSchema }, required: ['githubUrl'] },
       call: async ({ githubUrl }) => {
-        const repo = githubRepo(githubUrl);
-        const card = (await loadCatalog() ?? []).find(item => githubRepo(item.githubUrl) === repo) ?? null;
-        return { ...await installer.info(githubUrl), card };
+        const info = await installer.info(githubUrl);
+        const card = (await loadCatalog() ?? []).find(card => catalogKey(card.githubUrl) === catalogKey(githubUrl)) ?? null;
+        return { ...info, card };
       } },
     { name: 'detect', description: 'Run the Detector on a repository and return ranked candidate Recipes. Does not install anything.',
       inputSchema: { type: 'object', properties: { githubUrl: githubUrlSchema, ref: { type: 'string' } }, required: ['githubUrl'] },
-      call: ({ githubUrl, ref }) => installer.detect({ githubUrl, ref }) },
+      call: whenIdle(({ githubUrl, ref }) => installer.detect({ githubUrl, ref })) },
     { name: 'list_components', description: 'List installed Components from their Receipts with current Activation status.',
       inputSchema: { type: 'object', properties: {} },
-      call: () => installer.snapshot() },
+      call: whenIdle(() => installer.snapshot()) },
   ] });
   app.use('/api', (req, res, next) => {
     if (!isLocalRequest(req)) return res.status(403).json({ error: 'Local, same-origin requests only.' });
