@@ -3,6 +3,7 @@ import { lstat, mkdir, readFile, readdir, realpath, rename, stat, symlink, write
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import express from 'express';
 import { createInstaller } from './installer.mjs';
 import { githubRepo } from './github.mjs';
 
@@ -106,22 +107,14 @@ async function discoverInstallations(directory, installations) {
   }
   return [...observed.values()];
 }
-export function isLocalRequest(req) {
-  const isCloud = Boolean(process.env.APP_URL || process.env.K_SERVICE);
-  const ip = req.socket?.remoteAddress;
-  const isLocalIp = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip) ||
-    (isCloud && (ip?.startsWith('10.') || ip?.startsWith('172.') || ip?.startsWith('169.254.') || ip?.startsWith('::ffff:10.') || ip?.startsWith('::ffff:172.')));
-  if (!isLocalIp) return false;
+function isLocalRequest(req) {
+  const ip = req.socket.remoteAddress;
+  if (ip !== '::1' && !ip?.startsWith('127.') && !ip?.startsWith('::ffff:127.')) return false;
+  const { host, origin, 'sec-fetch-site': fetchSite } = req.headers;
+  if (req.headersDistinct.host?.length !== 1 || !/^(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d{1,5})?$/i.test(host)) return false;
   try {
-    const host = new URL(`http://${req.headers.host}`);
-    const isAllowedHost = ['localhost', '127.0.0.1', '[::1]'].includes(host.hostname) ||
-      (isCloud && (host.hostname.endsWith('.run.app') || (process.env.APP_URL && new URL(process.env.APP_URL).hostname === host.hostname)));
-    if (!isAllowedHost) return false;
-    if (req.headers.origin) {
-      const origin = new URL(req.headers.origin);
-      if (origin.origin !== host.origin && origin.hostname !== host.hostname) return false;
-    }
-    return req.headers['sec-fetch-site'] !== 'cross-site';
+    const expectedOrigin = new URL(`http://${host}`).origin;
+    return fetchSite !== 'cross-site' && (origin === undefined || origin === expectedOrigin);
   } catch { return false; }
 }
 
@@ -175,9 +168,14 @@ export function attachApi(app, {
     await writeFile(temporary, JSON.stringify(state, null, 2), { mode: 0o600 });
     await rename(temporary, file);
   };
-  app.use('/api/installer', (req, res, next) => {
+  app.use('/api', (req, res, next) => {
     if (!isLocalRequest(req)) return res.status(403).json({ error: 'Local, same-origin requests only.' });
     if (req.method !== 'GET' && !req.is('application/json')) return res.status(415).json({ error: 'JSON required.' });
+    next();
+  });
+  app.use('/api/ai/chat', express.json({ limit: '28mb' }));
+  app.use('/api', express.json({ limit: '512kb' }));
+  app.use('/api/installer', (_req, res, next) => {
     if (busy || initializingCatalog) return res.status(409).json({ error: 'Another task is running. Wait for it to finish.', code: 'BUSY' });
     res.setHeader('cache-control', 'no-store');
     next();
@@ -279,8 +277,6 @@ export function attachApi(app, {
   });
 
   app.post('/api/catalog/cards', async (req, res) => {
-    if (!isLocalRequest(req)) return res.status(403).json({ error: 'Local, same-origin requests only.' });
-    if (!req.is('application/json')) return res.status(415).json({ error: 'JSON required.' });
     if (busy || initializingCatalog) return res.status(409).json({ error: 'Another task is running. Wait for it to finish.', code: 'BUSY' });
     res.setHeader('cache-control', 'no-store');
     busy = true;
