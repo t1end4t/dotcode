@@ -82,6 +82,14 @@ test('Detector matches package source URLs and rejects unrelated packages with t
   assert.deepEqual((await unrelated.installer.detect({ githubUrl })).candidates, []);
 });
 
+test('Detect and Plan accept a default flake CLI without meta.mainProgram', async t => {
+  const { installer } = await fixture(t, { metadata: { mainProgram: null } });
+  const { candidates } = await installer.detect({ githubUrl });
+  assert.deepEqual(candidates.map(({ recipe }) => recipe.source.type), ['flake', 'nixpkgs']);
+  const plan = await installer.plan({ action: 'install', githubUrl, recipe: candidates[0].recipe });
+  assert.equal(plan.version, commit);
+});
+
 test('flake candidates remain installable when nixpkgs search or a package evaluation fails', async t => {
   for (const options of [{ searchError: true }, { metadataError: true }]) {
     const { installer, install } = await fixture(t, options);
@@ -205,7 +213,7 @@ test('nixpkgs install pins its revision and all external commands stay within th
 });
 
 test('packages with a separate bin output build and remove exactly that output link', async t => {
-  const { installer, install, calls, directory, output } = await fixture(t, { outputName: 'bin' });
+  const { installer, install, calls, directory, output } = await fixture(t, { outputName: 'bin', metadata: { mainProgram: null } });
   await install();
   const [receipt] = (await installer.snapshot()).receipts;
   assert.equal(await readlink(receipt.storePath), output);

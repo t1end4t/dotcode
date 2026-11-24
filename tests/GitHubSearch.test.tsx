@@ -6,7 +6,7 @@ import { GitHubSearch, GitHubResults } from '../frontend/src/components/GitHubSe
 import { INITIAL_ITEMS } from '../frontend/src/data/items';
 
 test('GitHub search exposes a labelled keyword/URL input and a search action without AI', () => {
-  const html = renderToStaticMarkup(<GitHubSearch items={[]} onAdded={async () => {}} />);
+  const html = renderToStaticMarkup(<GitHubSearch items={[]} onCatalogChanged={async () => {}} />);
   assert.match(html, /type="search"/);
   assert.match(html, /aria-label="Search GitHub"/);
   assert.match(html, /keyword or https:\/\/github.com\/owner\/repo/);

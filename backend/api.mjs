@@ -3,6 +3,7 @@ import { lstat, mkdir, readFile, readdir, realpath, rename, stat, symlink, write
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import express from 'express';
 import { createInstaller } from './installer.mjs';
 import { githubRepo } from './github.mjs';
@@ -21,8 +22,9 @@ function validateCatalog(items) {
       (item.latestReleaseAt == null || typeof item.latestReleaseAt === 'string' && Number.isFinite(Date.parse(item.latestReleaseAt))) &&
       (item.detection === undefined || item.detection &&
         typeof item.detection.checkedAt === 'string' && Number.isFinite(Date.parse(item.detection.checkedAt)) &&
-        (typeof item.detection.error === 'string' && item.detection.error.length <= 1000 ? item.detection.commit === null && item.detection.skillPaths?.length === 0 : /^[a-f\d]{40}$/.test(item.detection.commit)) &&
-        Array.isArray(item.detection.badges) && item.detection.badges.length <= 10 && item.detection.badges.every(badge => ['Skill', 'MCP', 'Nix flake', 'npm CLI', 'AppImage', 'Unknown'].includes(badge)) &&
+        (item.detection.error === undefined || typeof item.detection.error === 'string' && item.detection.error.length > 0 && item.detection.error.length <= 1000) &&
+        (/^[a-f\d]{40}$/.test(item.detection.commit) || item.detection.commit === null && item.detection.error && item.detection.skillPaths?.length === 0) &&
+        Array.isArray(item.detection.badges) && item.detection.badges.length <= 10 && item.detection.badges.every(badge => ['Skill', 'MCP', 'Nix flake', 'npm CLI', 'AppImage', 'Hook', 'Library', 'Unknown'].includes(badge)) &&
         Array.isArray(item.detection.skillPaths) && item.detection.skillPaths.length <= 10000 && item.detection.skillPaths.every(value => typeof value === 'string' && value.length <= 1000 && !value.includes('\\') && !value.startsWith('/') && !value.split('/').some(part => ['.', '..'].includes(part)))) ) ||
       new Set(items.map(item => item.id)).size !== items.length ||
       new Set(items.map(item => catalogKey(item.githubUrl))).size !== items.length) throw new Error('Invalid catalog. File unchanged.');
@@ -175,25 +177,28 @@ export function attachApi(app, {
   });
   app.use('/api/ai/chat', express.json({ limit: '28mb' }));
   app.use('/api', express.json({ limit: '512kb' }));
+  const installerFailure = (res, error) => res.status(['CONFLICT', 'BUSY'].includes(error.code) ? 409 : 400).json({ error: error.message, code: error.code });
+  // ponytail: keep only the latest search batch; superseded refreshes require a new Search.
+  let searchCards = [];
+  let searchGeneration = 0;
+  app.get('/api/installer/search', async (req, res) => {
+    const generation = ++searchGeneration;
+    res.setHeader('cache-control', 'no-store');
+    try {
+      const result = await installer.search(req.query.q);
+      if (res.destroyed) return;
+      if (generation === searchGeneration) searchCards = result.results;
+      res.json(result);
+    }
+    catch (error) { if (!res.destroyed) installerFailure(res, error); }
+  });
   app.use('/api/installer', (_req, res, next) => {
     if (busy || initializingCatalog) return res.status(409).json({ error: 'Another task is running. Wait for it to finish.', code: 'BUSY' });
     res.setHeader('cache-control', 'no-store');
     next();
   });
-
-  const installerFailure = (res, error) => res.status(['CONFLICT', 'BUSY'].includes(error.code) ? 409 : 400).json({ error: error.message, code: error.code });
   app.get('/api/installer', async (_req, res) => {
     try { res.json(await installer.snapshot()); }
-    catch (error) { installerFailure(res, error); }
-  });
-  // ponytail: keep only the latest search batch; retain per-tab results if concurrent searches become common.
-  let searchCards = [];
-  app.get('/api/installer/search', async (req, res) => {
-    try {
-      const result = await installer.search(req.query.q);
-      searchCards = result.results;
-      res.json(result);
-    }
     catch (error) { installerFailure(res, error); }
   });
   app.post('/api/installer/detect', async (req, res) => {
@@ -282,12 +287,28 @@ export function attachApi(app, {
     busy = true;
     try {
       const repo = githubRepo(req.body?.githubUrl);
+      const refresh = req.body.refreshDetection;
+      if (refresh !== undefined && (!refresh || typeof refresh !== 'object' || Array.isArray(refresh) || refresh.error)) {
+        throw new Error('Invalid detection refresh request.');
+      }
       const items = await loadCatalog() ?? [];
       const existing = items.find(item => githubRepo(item.githubUrl) === repo);
+      const found = searchCards.find(card => card.repo === repo);
+      if (refresh) {
+        if (!existing) return res.status(404).json({ error: 'Choose a Card from the Library.', code: 'NOT_FOUND' });
+        if (isDeepStrictEqual(existing.detection, refresh)) return res.json({ item: existing });
+        const detection = found?.detection;
+        if (!isDeepStrictEqual(detection, refresh) || Date.parse(existing.detection?.checkedAt) > Date.parse(detection.checkedAt)) {
+          return res.status(409).json({ error: 'This detection result is out of date. Search again before refreshing the Card.', code: 'CONFLICT' });
+        }
+        const updated = validateCatalog(items.map(item => item === existing ? { ...item, detection } : item));
+        await save(updated, catalogPath);
+        return res.json({ item: updated.find(item => item.id === existing.id) });
+      }
       if (existing) return res.json({ item: existing });
-      const candidate = searchCards.find(card => card.repo === repo) ?? await installer.inspect(`https://github.com/${repo}`);
-      const redirected = items.find(item => catalogKey(item.githubUrl) === catalogKey(candidate.githubUrl));
-      if (redirected) return res.json({ item: redirected });
+      const candidate = found ?? await installer.inspect(`https://github.com/${repo}`);
+      const saved = items.find(item => catalogKey(item.githubUrl) === catalogKey(candidate.githubUrl));
+      if (saved) return res.json({ item: saved });
       const updated = validateCatalog([...items, candidate]);
       await save(updated, catalogPath);
       res.status(201).json({ item: updated.at(-1) });
