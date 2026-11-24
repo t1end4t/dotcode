@@ -17,7 +17,7 @@ Run these commands from the repository root:
 
 ```bash
 npm install
-HOST=127.0.0.1 npm run dev
+npm run dev
 ```
 
 Open **http://127.0.0.1:3000**. The development server opens your browser automatically; set `BROWSER=none` to disable this.
@@ -26,7 +26,7 @@ For production:
 
 ```bash
 npm run build
-HOST=127.0.0.1 npm start
+npm start
 ```
 
 ## Use the Library
@@ -63,13 +63,13 @@ Set environment variables when starting the server. See `.env.example` for basic
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HOST` | `0.0.0.0` | Bind address; use `127.0.0.1` for local-only listening. |
+| `HOST` | `127.0.0.1` | HTTP bind address. |
 | `PORT` | `3000` | HTTP port. |
 | `DOTCODE_HOME` | `~/.dotcode` | Managed data directory. |
 | `BROWSER` | Default browser | Set to `none` to skip opening the browser in development. |
 | `GITHUB_TOKEN` | Unset | Optional token for higher GitHub API limits; falls back to `gh auth token`. |
 
-**Keep DotCode local.** The commands above restrict listening to this machine. The default bind address listens on all interfaces; do not expose DotCode as an unauthenticated public service.
+DotCode listens only on loopback by default. Changing `HOST` changes the listener address; API writes still require a loopback connection, a local `Host`, and a same-origin `Origin` header if sent.
 
 ## Development
 
