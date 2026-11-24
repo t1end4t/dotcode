@@ -40,7 +40,6 @@ export async function executeInstallerAction(body: Record<string, unknown>) {
 }
 
 export function SkillControls({ item, onChanged, onLegacyInstall }: { item: ManageableItem; onChanged: () => Promise<void>; onLegacyInstall: () => void }) {
-  const [subpath, setSubpath] = useState('');
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const receipts = item.installedSkills ?? [];
@@ -52,11 +51,11 @@ export function SkillControls({ item, onChanged, onLegacyInstall }: { item: Mana
       await executeInstallerAction(body);
       await onChanged();
     } catch (failure) {
-      if (failure instanceof Error && 'code' in failure && failure.code === 'NOT_SKILL' && !subpath && body.action === 'install') onLegacyInstall();
+      if (failure instanceof Error && 'code' in failure && failure.code === 'NOT_SKILL' && !item.detection?.skillPaths.length && body.action === 'install') onLegacyInstall();
       else setError(failure instanceof Error ? failure.message : 'Installer request failed.');
     } finally { setWorking(false); }
   };
-  return <div className="flex flex-col gap-2" onClick={event => event.stopPropagation()} aria-busy={working}>
+  return <div className="skill-controls flex flex-col gap-2" onClick={event => event.stopPropagation()} aria-busy={working}>
     {receipts.length ? receipts.map(receipt => <div key={receipt.id} className="flex flex-wrap items-center gap-2">
       <span className="text-xs">{receipt.name}</span>
       {(['codex', 'claude'] as const).map(agent => <button key={agent} type="button" role="switch"
@@ -68,15 +67,9 @@ export function SkillControls({ item, onChanged, onLegacyInstall }: { item: Mana
       {receipt.error && <p role="alert" className="text-xs text-(--ctp-red)">{receipt.error}</p>}
     </div>) : <>
       <button type="button" disabled={working} className={`rt-button ${item.installed ? '' : 'rt-primary'}`}
-        onClick={() => item.installed ? onLegacyInstall() : void apply({ action: 'install', githubUrl: item.githubUrl, subpath: subpath.trim() })}>
+        onClick={() => item.installed ? onLegacyInstall() : void apply({ action: 'install', githubUrl: item.githubUrl })}>
         {working ? 'Working…' : item.installed ? 'Uninstall' : 'Install'}
       </button>
-      {!item.installed && <details className="text-xs text-[var(--dc-muted)]">
-        <summary className="cursor-pointer">Skill directory</summary>
-        <label className="flex flex-col gap-1 mt-2">Directory inside {item.repo}
-          <input aria-label={`Skill directory for ${item.name}`} value={subpath} disabled={working} onChange={event => setSubpath(event.target.value)} placeholder="Repository root (or skills/review)" className="rt-input" />
-        </label>
-      </details>}
     </>}
     {error && <p role="alert" className="text-xs text-(--ctp-red)">{error}</p>}
   </div>;

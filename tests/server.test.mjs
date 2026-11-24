@@ -32,6 +32,8 @@ test('development opens the browser and serves HMR at the listening HTTP address
     assert.match(output, /BROWSER_OPEN:http:\/\/127\.0\.0\.1:[1-9]\d*/);
     const opened = output.match(/BROWSER_OPEN:(\S+)/)[1];
     assert.ok(output.includes(`DotCode: ${opened}`));
+    const html = await (await fetch(opened)).text();
+    assert.match(html, /src="\/prototype\/main\.tsx"/, 'The default app must use the Library prototype GUI.');
     const socket = new WebSocket(opened.replace(/^http/, 'ws'), 'vite-hmr');
     try {
       const [message] = await once(socket, 'message', { signal: AbortSignal.timeout(3000) });

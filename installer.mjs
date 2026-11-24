@@ -1,3 +1,4 @@
+import { createGithub } from './github.mjs';
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
@@ -25,7 +26,7 @@ function source(value) {
   return { githubUrl, subpath, ref };
 }
 
-export function createInstaller({ directory, home = homedir(), run = promisify(execFile), fetchRemote = globalThis.fetch, now = Date.now, searchPath = process.env.PATH ?? '' } = {}) {
+export function createInstaller({ directory, home = homedir(), run = promisify(execFile), fetchRemote = globalThis.fetch, now = Date.now, searchPath = process.env.PATH ?? '', env = process.env } = {}) {
   home = path.resolve(home);
   directory = path.resolve(directory ?? process.env.DOTCODE_HOME ?? path.join(home, '.dotcode'));
   const contains = (root, target) => target === root || target.startsWith(root + path.sep);
@@ -34,7 +35,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
   const receiptFile = path.join(directory, 'receipts.json');
   const pending = new Map();
   let executing = false;
-  let githubToken;
+  const github = createGithub({ fetchRemote, run, now, env });
   const componentId = value => createHash('sha256').update(`${value.githubUrl}\n${value.type ? `cli\n${value.type}\n${value.attribute}` : value.subpath}`).digest('hex').slice(0, 24);
   const storePath = (id, version, kind = 'skill', outputName = 'out') => path.join(directory, kind === 'cli' ? 'store/nix' : 'store/skills', id, version + (outputName === 'out' ? '' : `-${outputName}`));
   const activationPath = (agent, name) => path.join(home, agent === 'codex' ? '.agents' : '.claude', 'skills', name);
@@ -121,28 +122,23 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     })) };
   }
 
-  async function githubJSON(url) {
-    githubToken ??= (async () => {
-      if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
-      try { return (await run('gh', ['auth', 'token'], { timeout: 10000, maxBuffer: 8192 })).stdout.trim(); }
-      catch { return ''; }
-    })();
-    const token = await githubToken;
-    const response = await fetchRemote(url, { headers: { accept: 'application/vnd.github+json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, signal: AbortSignal.timeout(30000), redirect: 'error' });
-    if (!response.ok) throw new InstallerError('SOURCE_ERROR', `GitHub request failed (HTTP ${response.status}).`);
-    return response.json();
-  }
+
+  const freshDetection = detection => detection && !detection.error && now() - Date.parse(detection.checkedAt) >= 0 && now() - Date.parse(detection.checkedAt) <= 24 * 60 * 60 * 1000;
 
   async function repository(value) {
     const repo = value.githubUrl.slice('https://github.com/'.length);
-    const revision = await githubJSON(`https://api.github.com/repos/${repo}/commits/${encodeURIComponent(value.ref)}`);
+    const revision = await github.request(`/repos/${repo}/commits/${encodeURIComponent(value.ref)}`);
     if (!/^[\da-f]{40}$/.test(revision.sha)) throw new Error('GitHub returned an invalid commit.');
-    const tree = await githubJSON(`https://api.github.com/repos/${repo}/git/trees/${revision.sha}?recursive=1`);
+    const tree = await github.request(`/repos/${repo}/git/trees/${revision.sha}?recursive=1`);
     if (!Array.isArray(tree.tree) || tree.truncated) throw new Error('Cannot detect Components from an incomplete GitHub tree.');
     return { version: revision.sha, tree: tree.tree };
   }
 
-  async function detectSkill(value) {
+  async function detectSkill(value, detection) {
+    if (value.ref === 'HEAD' && freshDetection(detection)) {
+      if (!detection.skillPaths.includes(value.subpath)) throw new InstallerError('NOT_SKILL', 'No SKILL.md or skill.md in that directory.');
+      return detection.commit;
+    }
     const { version, tree } = await repository(value);
     const marker = value.subpath ? `${value.subpath}/` : '';
     if (!tree.some(entry => [marker + 'SKILL.md', marker + 'skill.md'].includes(entry.path) && entry.type === 'blob' && ['100644', '100755'].includes(entry.mode))) throw new InstallerError('NOT_SKILL', 'No SKILL.md or skill.md in that directory.');
@@ -187,7 +183,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     return { candidates, version, warnings };
   }
 
-  async function plan(body) {
+  async function plan(body, detection) {
     if (!body || !['install', 'enable', 'disable', 'uninstall'].includes(body.action)) throw new InstallerError('INVALID_INPUT', 'Invalid installer action.');
     const saved = await state();
     let receipt;
@@ -223,7 +219,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
         if (saved.receipts.some(receipt => receipt.id === id)) throw new InstallerError('CONFLICT', 'Component is already installed.');
         const name = value.subpath.split('/').at(-1) || value.githubUrl.split('/').at(-1);
         if (!/^[\w.-]{1,100}$/.test(name)) throw new InstallerError('INVALID_INPUT', 'Skill directory name is too long.');
-        const version = await detectSkill(value);
+        const version = await detectSkill(value, detection);
         receipt = { id, name, kind: 'skill', recipe: { backend: 'files', source: value }, version, storePath: storePath(id, version), installedAt: new Date(now()).toISOString(), activations: Object.fromEntries(agentNames.map(agent => [agent, { path: activationPath(agent, name) }])) };
       }
     } else {
@@ -389,5 +385,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     } finally { executing = false; }
   }
 
-  return { detect, snapshot, plan, execute };
+  return { snapshot, plan, execute, search: github.search, inspect: github.inspect, detect,
+    refreshDetection: async card => freshDetection(card.detection) ? card : { ...card, ...await github.detect(card.githubUrl, card.tags) },
+  };
 }

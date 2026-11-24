@@ -151,6 +151,10 @@ test('inventory discovers CLI-created Nix profiles without executing tools or wr
     assert.equal((await inventory())[0].installed, false);
     await rm(profile, { recursive: true });
     assert.equal((await inventory())[0].installed, false);
+    const result = path.join(profile, '..', 'result');
+    await symlink(store, result);
+    await writeFile(path.join(directory, 'inventory.json'), JSON.stringify({ installations: [{ ...receipt, location: result, method: 'Nix AppImage package' }], runs: [] }));
+    assert.equal((await inventory())[0].installed, true, 'A Nix result is not a missing Nix profile.');
     assert.equal(JSON.parse(await readFile(path.join(directory, 'inventory.json'), 'utf8')).installations[0].installed, true);
   } finally {
     server.close();

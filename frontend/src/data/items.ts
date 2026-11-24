@@ -24,6 +24,11 @@ export interface ManageableItem {
   updatedAt?: string;
   receipt?: Installation;
   installedSkills?: SkillReceipt[];
+  stars?: number;
+  iconUrl?: string;
+  kind?: 'cli' | 'desktop-app' | 'skill' | 'mcp';
+  latestReleaseAt?: string | null;
+  detection?: { checkedAt: string; commit: string | null; badges: string[]; skillPaths: string[]; error?: string };
 }
 
 const RAW_ITEMS: ManageableItem[] = [

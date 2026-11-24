@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createRuntime } from './runtime.mjs';
 import { createInstaller } from './installer.mjs';
+import { githubRepo } from './github.mjs';
 
 async function readMcpServers() {
   const { stdout } = await promisify(execFile)('codex', ['mcp', 'list', '--json'], { timeout: 10000 });
@@ -92,10 +93,21 @@ function validateCatalog(items) {
   if (!Array.isArray(items) || items.length > 200 || !items.every(item => item &&
       catalogFields.every(field => typeof item[field] === 'string' && item[field].length <= 16000) && item.id.trim() && item.name.trim() &&
       item.category.trim() && item.category.length <= 80 && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/.test(item.githubUrl) &&
-      Array.isArray(item.tags) && item.tags.length <= 50 && item.tags.every(tag => typeof tag === 'string' && tag.length <= 100)) ||
+      Array.isArray(item.tags) && item.tags.length <= 50 && item.tags.every(tag => typeof tag === 'string' && tag.length <= 100) &&
+      (item.kind === undefined || ['cli', 'desktop-app', 'skill', 'mcp'].includes(item.kind)) &&
+      (item.iconUrl === undefined || typeof item.iconUrl === 'string' && item.iconUrl.length <= 2048 && /^https:\/\/(?:avatars|raw)\.githubusercontent\.com\//.test(item.iconUrl)) &&
+      (item.stars === undefined || Number.isSafeInteger(item.stars) && item.stars >= 0) &&
+      (item.latestReleaseAt == null || typeof item.latestReleaseAt === 'string' && Number.isFinite(Date.parse(item.latestReleaseAt))) &&
+      (item.detection === undefined || item.detection &&
+        typeof item.detection.checkedAt === 'string' && Number.isFinite(Date.parse(item.detection.checkedAt)) &&
+        (typeof item.detection.error === 'string' && item.detection.error.length <= 1000 ? item.detection.commit === null && item.detection.skillPaths?.length === 0 : /^[a-f\d]{40}$/.test(item.detection.commit)) &&
+        Array.isArray(item.detection.badges) && item.detection.badges.length <= 10 && item.detection.badges.every(badge => ['Skill', 'MCP', 'Nix flake', 'npm CLI', 'AppImage', 'Unknown'].includes(badge)) &&
+        Array.isArray(item.detection.skillPaths) && item.detection.skillPaths.length <= 10000 && item.detection.skillPaths.every(value => typeof value === 'string' && value.length <= 1000 && !value.includes('\\') && !value.startsWith('/') && !value.split('/').some(part => ['.', '..'].includes(part)))) ) ||
       new Set(items.map(item => item.id)).size !== items.length ||
       new Set(items.map(item => catalogKey(item.githubUrl))).size !== items.length) throw new Error('Invalid catalog. File unchanged.');
-  return items.map(item => ({ ...Object.fromEntries(catalogFields.map(field => [field, item[field]])), tags: item.tags }));
+  return items.map(item => ({ ...Object.fromEntries([...catalogFields, 'stars', 'latestReleaseAt', 'kind', 'iconUrl'].filter(field => item[field] !== undefined).map(field => [field, item[field]])), tags: item.tags,
+    ...(item.detection && { detection: { checkedAt: item.detection.checkedAt, commit: item.detection.commit, badges: item.detection.badges, skillPaths: item.detection.skillPaths, ...(item.detection.error && { error: item.detection.error }) } }),
+  }));
 }
 
 function applyCatalogChanges(items, changes) {
@@ -119,7 +131,7 @@ function applyCatalogChanges(items, changes) {
     if (Object.keys(change.item).some(field => ![...catalogFields, 'tags'].includes(field)) ||
         catalogKey(item.githubUrl) !== key || item.repo !== new URL(item.githubUrl).pathname.slice(1).replace(/\/$/, '') ||
         (current && item.id !== current.id)) throw new Error('Invalid card identity or metadata. Catalog unchanged.');
-    updated = current ? updated.map(entry => entry === current ? item : entry) : [...updated, item];
+    updated = current ? updated.map(entry => entry === current ? { ...current, ...item } : entry) : [...updated, item];
   }
   return validateCatalog(updated);
 }
@@ -152,7 +164,7 @@ async function discoverInstallations(directory, installations) {
     const key = item.githubUrl.toLowerCase().replace(/\/$/, '');
     const previous = observed.get(key);
     const owned = previous && (previous.location === location ||
-      (/nix/i.test(previous.method) && contains(path.dirname(location), previous.location)));
+      (/nix/i.test(previous.method) && contains(location, previous.location)));
     let manifest;
     try {
       if (!contains(workspace, await realpath(path.dirname(location)))) continue;
@@ -461,6 +473,16 @@ export function attachAgent(app, {
     try { res.json(await installer.snapshot()); }
     catch (error) { installerFailure(res, error); }
   });
+  // ponytail: keep only the latest search batch; retain per-tab results if concurrent searches become common.
+  let searchCards = [];
+  app.get('/api/installer/search', async (req, res) => {
+    try {
+      const result = await installer.search(req.query.q);
+      searchCards = result.results;
+      res.json(result);
+    }
+    catch (error) { installerFailure(res, error); }
+  });
   app.post('/api/installer/detect', async (req, res) => {
     busy = true;
     try { res.json(await installer.detect(req.body)); }
@@ -470,8 +492,22 @@ export function attachAgent(app, {
   app.post('/api/installer/plan', async (req, res) => {
     busy = true;
     try {
-      if (req.body?.action === 'install' && !(await loadCatalog() ?? []).some(card => typeof req.body.githubUrl === 'string' && catalogKey(card.githubUrl) === catalogKey(req.body.githubUrl))) throw new Error('Choose a Card from the Library.');
-      res.json(await installer.plan(req.body));
+      let body = req.body;
+      let detection;
+      if (req.body?.action === 'install') {
+        const cards = await loadCatalog() ?? [];
+        const card = cards.find(card => typeof req.body.githubUrl === 'string' && catalogKey(card.githubUrl) === catalogKey(req.body.githubUrl));
+        if (!card) throw new Error('Choose a Card from the Library.');
+        if (card.detection) {
+          const refreshed = await installer.refreshDetection(card);
+          if (refreshed !== card) await save(validateCatalog(cards.map(entry => entry === card ? refreshed : entry)), catalogPath);
+          detection = refreshed.detection;
+          if (body.recipe?.backend !== 'nix' && body.subpath === undefined && (body.ref ?? 'HEAD') === 'HEAD' && detection.skillPaths.length === 1) {
+            body = { ...body, subpath: detection.skillPaths[0] };
+          }
+        }
+      }
+      res.json(await installer.plan(body, detection));
     } catch (error) { installerFailure(res, error); }
     finally { busy = false; }
   });
@@ -573,6 +609,27 @@ export function attachAgent(app, {
   app.get('/api/catalog', async (_req, res) => {
     try { await prepare(); res.json({ items: validateCatalog(JSON.parse(await readFile(catalogPath, 'utf8'))) }); }
     catch (error) { error.code === 'ENOENT' ? res.json({ items: null }) : res.status(500).json({ error: `Invalid catalog file: ${error.message}` }); }
+  });
+
+  app.post('/api/catalog/cards', async (req, res) => {
+    if (!isLocalRequest(req)) return res.status(403).json({ error: 'Local, same-origin requests only.' });
+    if (!req.is('application/json')) return res.status(415).json({ error: 'JSON required.' });
+    if (busy || initializingCatalog) return res.status(409).json({ error: 'Another task is running. Wait for it to finish.', code: 'BUSY' });
+    res.setHeader('cache-control', 'no-store');
+    busy = true;
+    try {
+      const repo = githubRepo(req.body?.githubUrl);
+      const items = await loadCatalog() ?? [];
+      const existing = items.find(item => githubRepo(item.githubUrl) === repo);
+      if (existing) return res.json({ item: existing });
+      const candidate = searchCards.find(card => card.repo === repo) ?? await installer.inspect(`https://github.com/${repo}`);
+      const redirected = items.find(item => catalogKey(item.githubUrl) === catalogKey(candidate.githubUrl));
+      if (redirected) return res.json({ item: redirected });
+      const updated = validateCatalog([...items, candidate]);
+      await save(updated, catalogPath);
+      res.status(201).json({ item: updated.at(-1) });
+    } catch (error) { installerFailure(res, error); }
+    finally { busy = false; }
   });
 
   app.put('/api/catalog', async (req, res) => {

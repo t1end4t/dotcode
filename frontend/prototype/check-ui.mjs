@@ -36,7 +36,7 @@ const input = (selector, value) => evaluate(`{
 const count = () => evaluate(`return document.querySelectorAll(".tool-card").length;`);
 const checked = name => evaluate(`return document.querySelector('[role="switch"][aria-label="Enable ${name}"]')?.getAttribute('aria-checked');`);
 const origin = evaluate(`return location.origin;`);
-assert.ok(['http://127.0.0.1:3000', 'http://127.0.0.1:5174'].includes(origin), 'Refuse to test an unexpected origin');
+assert.equal(origin, 'http://127.0.0.1:5174', 'Refuse to test the backend-connected app');
 command('reload');
 assert.equal(evaluate(`return !!document.querySelector('script[type="module"][src="/prototype/main.tsx"], script[type="module"][src="/main.tsx"]');`), true, 'Refuse to test a UI other than the in-memory prototype');
 command('wait', '--selector', '.tool-card');
