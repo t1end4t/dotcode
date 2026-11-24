@@ -1,22 +1,55 @@
 import assert from 'node:assert/strict';
 import { chmod, lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { request } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import express from 'express';
-import { attachApi, isLocalRequest } from '../backend/api.mjs';
+import { attachApi } from '../backend/api.mjs';
 
 const attachAgent = attachApi;
 
 const url = 'https://github.com/example/tool';
 
-test('remote, cross-origin, and DNS-rebinding requests are rejected', () => {
-  const request = { socket: { remoteAddress: '127.0.0.1' }, headers: { host: '127.0.0.1:3000', origin: 'http://127.0.0.1:3000' } };
-  assert.equal(isLocalRequest(request), true);
-  assert.equal(isLocalRequest({ ...request, socket: { remoteAddress: '192.168.1.5' } }), false);
-  assert.equal(isLocalRequest({ ...request, headers: { ...request.headers, origin: 'https://evil.example' } }), false);
-  assert.equal(isLocalRequest({ ...request, headers: { host: 'evil.example' } }), false);
-  assert.equal(isLocalRequest({ ...request, headers: { ...request.headers, 'sec-fetch-site': 'cross-site' } }), false);
+test('all HTTP write routes require a local Host, same Origin if present, and JSON', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-write-'));
+  const app = express();
+  attachApi(app, { directory });
+  const server = app.listen(0, '127.0.0.1');
+  t.after(async () => {
+    await new Promise(resolve => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
+  });
+  await new Promise(resolve => server.once('listening', resolve));
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+  const write = (method, route, headers = {}, body = '{"items":[]}') => new Promise((resolve, reject) => {
+    const req = request(base + route, { method, headers: { 'content-type': 'application/json', ...headers } }, res => {
+      res.resume();
+      resolve(res.statusCode);
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+  for (const [method, route] of [
+    ['PUT', '/api/catalog'], ['POST', '/api/catalog/cards'], ['POST', '/api/installer/detect'],
+    ['POST', '/api/installer/plan'], ['POST', '/api/installer/execute'],
+  ]) {
+    for (const headers of [
+      { host: 'example.test', 'x-forwarded-host': `127.0.0.1:${port}` },
+      { host: `127.0.0.1:${port}/path` },
+      { origin: 'http://127.0.0.1' }, { origin: `https://127.0.0.1:${port}` },
+      { origin: `http://localhost:${port}` }, { origin: `${base}/path` },
+      { origin: 'null' }, { origin: '' }, { origin: base, 'sec-fetch-site': 'cross-site' },
+    ]) {
+      assert.equal(await write(method, route, headers), 403, `${method} ${route}: ${JSON.stringify(headers)}`);
+    }
+    assert.equal(await write(method, route, { 'content-type': 'text/plain' }), 415, `${method} ${route}`);
+  }
+  assert.equal(await write('PUT', '/api/catalog', { host: 'example.test' }, '{'), 403);
+  assert.deepEqual(await (await fetch(`${base}/api/catalog`)).json(), { items: null });
+  assert.equal(await write('PUT', '/api/catalog', { origin: base }), 200);
+  assert.deepEqual(await (await fetch(`${base}/api/catalog`)).json(), { items: [] });
 });
 
 test('catalog persists as validated JSON outside app source', async () => {
