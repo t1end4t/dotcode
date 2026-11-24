@@ -11,7 +11,8 @@ const releaseLabel = 'the latest GitHub release';
 const isRateLimit = status => status === 403 || status === 429;
 const rateLimitWarning = 'GitHub rate limit or access restriction. Wait and retry, or configure GITHUB_TOKEN.';
 const npmBinPath = file => posix.join('/', file.replace(/[\\:]/g, '/')).slice(1);
-const packageManifests = ['go.mod', 'Cargo.toml', 'pyproject.toml', 'pom.xml', 'Gemfile'];
+// ponytail: a standalone Hook repo holds only hook files, support scripts, docs and metadata; widen when real hook repos carry more.
+const hookRepoFile = /^(?:(?:hooks|\.?githooks|\.claude|\.codex|scripts|docs|\.github)\/.+|[^/]+\.md|(?:LICENSE|COPYING)[^/]*|\.[^/]+|package(?:-lock)?\.json|flake\.(?:nix|lock))$/i;
 // ponytail: recognize conventional single-package layouts; use a TOML parser for custom packaging layouts.
 const cargoLibrary = (paths, manifest) => /^\s*\[\s*package\s*\]/m.test(manifest) && !/(?:\[\s*\[\s*|^\s*)["']?bin["']?\s*(?:\]|=)/m.test(manifest) &&
   !paths.has('src/main.rs') && ![...paths].some(file => /^(?:src\/bin\/|.+\/Cargo\.toml$)/.test(file));
@@ -137,8 +138,7 @@ export function createGithub({ fetchRemote = globalThis.fetch, run = promisify(e
         library = Boolean(pythonLibrary(paths, await probe(text('pyproject.toml'), 'pyproject.toml') ?? ''));
       }
       let hook = false;
-      const executable = files.some(({ path, mode, size }) => mode === '100755' && size !== 0 && /^(?:bin\/)?[^/]+$/.test(path));
-      if (!executable && flakeCli !== 'candidate' && pkg !== undefined && !plugin && !library && !npmApp && !webApp && !packageManifests.some(file => paths.has(file))) {
+      if (flakeCli !== 'candidate' && pkg !== undefined && !plugin && !library && !npmApp && [...paths].every(file => hookRepoFile.test(file))) {
         hook = files.some(({ path, mode }) => mode === '100755' && gitHookNames.has(gitHook.exec(path)?.[1]));
         for (const file of ['.codex/hooks.json', '.claude/settings.json', 'hooks/hooks.json']) {
           if (!hook && paths.has(file)) hook = hasHook(await probe(manifest(file), file), file.startsWith('.codex/'));

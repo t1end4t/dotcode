@@ -11,6 +11,9 @@ _Avoid_: catalog (chỉ dùng khi nói về file lưu trữ), collection
 **Badge Library**:
 Nhãn cho repo chứa package dùng trong dự án khác và không có điểm chạy độc lập. Badge Library không phải là Kind; Card mang nhãn này vẫn lưu được trong Library.
 
+**Hook**:
+Nhãn cho repo chỉ chứa hook đứng riêng (Git hook hoặc hook của coding agent) cùng script hỗ trợ và tài liệu. Hook không phải là Kind; DotCode không đề xuất Recipe hay Install cho Card mang nhãn này.
+
 **Card**:
 Một repo GitHub có trong Library, gồm cả metadata và ghi chú của user. Card không phải là bản cài: thêm hay xoá Card không cài hay gỡ gì cả.
 _Avoid_: item, tool entry

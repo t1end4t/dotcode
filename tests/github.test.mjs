@@ -169,6 +169,11 @@ test('Detector distinguishes websites and incidental hooks from declared standal
     }, 'Unknown']),
     ['Go service with a hook test fixture', ['go.mod', 'hooks/test-fixture.sh'], {}, 'Unknown'],
     ['Go service with an incidental declared hook', ['go.mod', '.codex/hooks.json'], { '.codex/hooks.json': commandHooks }, 'Unknown'],
+    ['setup.py package with an executable Git hook', ['setup.py', 'tool/__init__.py', '.githooks/pre-commit'], {}, 'Unknown'],
+    ['Make project with an executable Git hook', ['Makefile', 'src/main.c', '.githooks/pre-commit'], {}, 'Unknown'],
+    ['Gradle app with an incidental Claude hook', ['build.gradle', 'src/main/java/App.java', '.claude/settings.json'], { '.claude/settings.json': commandHooks }, 'Unknown'],
+    ['shell sources with an incidental Claude hook', ['src/tool.sh', 'README.md', '.claude/settings.json'], { '.claude/settings.json': commandHooks }, 'Unknown'],
+    ['documented Git hook with metadata', ['README.md', 'LICENSE', '.gitignore', '.github/workflows/ci.yml', 'docs/usage.md', '.githooks/pre-commit'], {}, 'Hook'],
     ['empty Codex manifest', ['.codex/hooks.json'], { '.codex/hooks.json': { hooks: {} } }, 'Unknown'],
     ['empty plugin-style hook manifest', ['hooks/hooks.json'], { 'hooks/hooks.json': {} }, 'Unknown'],
     ['implicit-entry Library with incidental hook', ['package.json', 'index.js', '.claude/settings.json'], {
