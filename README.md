@@ -69,7 +69,9 @@ Set environment variables when starting the server. See `.env.example` for basic
 | `BROWSER` | Default browser | Set to `none` to skip opening the browser in development. |
 | `GITHUB_TOKEN` | Unset | Optional token for higher GitHub API limits; falls back to `gh auth token`. |
 
-DotCode listens only on loopback by default. Changing `HOST` changes the listener address; API writes still require a loopback connection, a local `Host`, and a same-origin `Origin` header if sent.
+**Keep DotCode local.** Do not expose it as an unauthenticated public service, including through a reverse proxy. DotCode listens only on loopback by default. Changing `HOST` changes the listener address; API writes still require a loopback connection, a local `Host`, and a same-origin `Origin` header if sent.
+
+The loopback check uses the immediate socket peer. A reverse proxy that connects to DotCode over loopback is inside that trust boundary: DotCode sees the proxy as the peer even when the original client is remote.
 
 ## Development
 
