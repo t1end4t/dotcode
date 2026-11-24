@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import test from 'node:test';
-import { createInstaller } from '../installer.mjs';
+import { createInstaller } from '../server/installer.mjs';
 
 const githubUrl = 'https://github.com/example/hello';
 const commit = 'a'.repeat(40);

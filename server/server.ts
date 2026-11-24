@@ -26,11 +26,11 @@ if (process.env.NODE_ENV !== "production") {
   vite = await createServer({
     server: { middlewareMode: true, host: "0.0.0.0", proxy: {}, hmr: { server } },
     appType: "spa",
-    root: path.resolve(__dirname, "frontend"),
+    root: path.resolve(__dirname, "../frontend"),
   });
   app.use(vite.middlewares);
 } else {
-  const distPath = path.resolve(__dirname, "frontend/dist");
+  const distPath = path.resolve(__dirname, "../frontend/dist");
   app.use(express.static(distPath));
   app.get("*", (_req, res) => res.sendFile(path.resolve(distPath, "index.html")));
 }

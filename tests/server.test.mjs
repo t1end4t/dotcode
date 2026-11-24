@@ -17,7 +17,7 @@ test('development opens the browser and serves HMR at the listening HTTP address
       console.log('BROWSER_OPEN:' + url);
     });
   `);
-  const child = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
+  const child = spawn(process.execPath, ['--import', 'tsx', 'server/server.ts'], {
     cwd: new URL('..', import.meta.url),
     env: { ...process.env, NODE_ENV: 'development', PORT: '0', DOTCODE_HOME: directory, BROWSER: browser },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -33,7 +33,7 @@ test('development opens the browser and serves HMR at the listening HTTP address
     const opened = output.match(/BROWSER_OPEN:(\S+)/)[1];
     assert.ok(output.includes(`DotCode: ${opened}`));
     const html = await (await fetch(opened)).text();
-    assert.match(html, /src="\/prototype\/main\.tsx"/, 'The default app must use the Library prototype GUI.');
+    assert.match(html, /src="\/src\/main\.tsx"/, "The default app must serve the Library UI.");
     const socket = new WebSocket(opened.replace(/^http/, 'ws'), 'vite-hmr');
     try {
       const [message] = await once(socket, 'message', { signal: AbortSignal.timeout(3000) });

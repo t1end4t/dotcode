@@ -1,16 +1,13 @@
 # DotCode
 
-A local dashboard for developer tools, services, models, and coding agents.
+A local dashboard for finding, installing, and managing GitHub repositories: CLIs, desktop apps, coding-agent skills, and MCP servers.
 
-The default UI uses the Library prototype design with saved Cards, server-side
-GitHub search and skill installation controls. The assistant remains a preview.
-`npm run prototype` runs the separate, in-memory demo with simulated actions.
+The UI shows the Library of saved Cards with server-side GitHub search and
+installation controls. The assistant remains a preview.
 
 ## What You Can Do
 
 - **Tools:** Browse GitHub projects, save notes, check releases, and manage installations through chat.
-- **Services:** Start, stop, and configure user-level systemd services. View logs and control autostart.
-- **Models:** Import or download GGUF files, run local inference, or connect to a local OpenAI-compatible server.
 - **Agent setup:** Manage workspace skills, Model Context Protocol (MCP) servers, and instructions for Codex or Claude.
 
 ## Get Started
@@ -32,8 +29,6 @@ For production:
 npm run build
 HOST=127.0.0.1 npm start
 ```
-
-Service management requires Linux with user-level systemd. Local model inference requires `llama-server` or an existing compatible server.
 
 ## Use the Assistant
 
@@ -83,8 +78,6 @@ DotCode keeps managed data outside this repository, under `~/.dotcode` by defaul
   workspace/       Tool sources and installation artifacts
   catalog.json     Your library, notes, and tags
   inventory.json   Installation records and run logs
-  runtime/         Service state, units, and backups
-  models/          Local model files
 ```
 
 This directory holds machine-local data, not application source. Keep it out of Git.
@@ -110,38 +103,16 @@ Set environment variables when starting the server. See `.env.example` for basic
 
 ## Development
 
-Built with React, TypeScript, Vite, Express, and the Codex SDK.
+Built with React, TypeScript, Vite, Express, and the Codex SDK. Server code is in `server/`, the UI in `frontend/src/`.
 
-### Library UI (prototype)
+### Library UI
 
 `npm run dev` serves the Library UI at **http://127.0.0.1:3000/**,
-and `npm run build` bundles the same UI for `npm start`.
-To run it separately without the application server:
+and `npm run build` bundles it for `npm start`. The entry and styles are
+`frontend/src/main.tsx` and `frontend/src/index.css`.
 
-```bash
-npm run prototype
-```
-
-Open **http://127.0.0.1:5174/**. The Library uses repo cards with English
-GitHub About descriptions, owner avatars, search and Kind/status filters. Try Install, Enable/Disable,
-Uninstall and adding a GitHub repo. **Add repository** searches the public
-GitHub API by keyword, `owner/repo`, or URL; results show About, language, stars
-and Library/installation badges. Add to Library saves only an in-memory Card,
-without installing it. Search uses no token and may reach GitHub rate limits. Open the AI sidebar or use **Ask assistant** on a
-card to carry that repo into chat. Chat and installation actions are explicitly
-simulated; no AI provider or installer is connected. Reload to reset all state.
-
-The entry, fixtures, and styles live in `frontend/prototype/`. The default
-`frontend/index.html` reuses that entry; the separate server uses
-`frontend/vite.prototype.config.ts` without an API proxy or Express server.
-The standalone demo does not use `DOTCODE_HOME` or the app's storage. The default
-app uses saved Cards and real skill installation controls with the same design.
-Run `npm run prototype:check` to type-check the isolated prototype.
-With its server running, `npm run prototype:smoke` checks the separate entry and
-that catalog writes return 404 instead of reaching the application backend.
-With the standalone demo open at port 5174 in an Orca browser tab, run
-`node frontend/prototype/check-ui.mjs <browserPageId>` for the UI interaction check.
-This check resets the in-memory prototype and never changes backend data.
+With the app open in an Orca browser tab, run
+`node tests/check-ui.mjs <browserPageId>` for the UI interaction check.
 For the app's Search/Add flow, run
 `node tests/check-github-ui.mjs <browserPageId>` against a local app tab. Its
 browser fixtures cover search recovery, stale responses and Add without writing Cards.
@@ -155,7 +126,7 @@ browser fixtures cover search recovery, stale responses and Add without writing 
 | `npm run build` | Type-check the frontend and tests, then bundle the frontend. |
 | `npm start` | Serve the production build. |
 
-`server.ts` is the server entry point. `frontend/prototype/` contains the current UI; `frontend/src/` retains the previous backend-connected UI. `tests/` contains regression tests. `instructions.md` defines the assistant's runtime policy.
+`server/server.ts` is the server entry point; `server/instructions.md` defines the assistant's policy. `frontend/src/` contains the UI. `tests/` contains regression tests.
 
 Production still needs the server source and dependencies. The build does not type-check the server.
 
@@ -202,5 +173,4 @@ otherwise it goes in `~/.dotcode/bin`, independent of `DOTCODE_HOME`.
 `needsPath` so a UI can offer PATH setup guidance. Enable/disable plans use
 the Receipt's `componentId` without an `agent`. Disable removes only the
 wrapper; uninstall also removes the out-link and Receipt, leaving shared
-Nix store paths for Nix GC. This backend is not connected to the default
-prototype UI yet.
+Nix store paths for Nix GC.

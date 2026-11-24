@@ -30,7 +30,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
   home = path.resolve(home);
   directory = path.resolve(directory ?? process.env.DOTCODE_HOME ?? path.join(home, '.dotcode'));
   const contains = (root, target) => target === root || target.startsWith(root + path.sep);
-  const appDirectory = fileURLToPath(new URL('.', import.meta.url)).replace(/\/$/, '');
+  const appDirectory = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
   if (directory === home || directory === path.parse(directory).root || [appDirectory, path.join(home, 'nix-dev/nixos-conf')].some(root => contains(root, directory) || contains(directory, root))) throw new Error('Installer data must be separate from source, home and NixOS configuration.');
   const receiptFile = path.join(directory, 'receipts.json');
   const pending = new Map();

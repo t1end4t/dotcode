@@ -36,7 +36,7 @@ _Avoid_: analyzer, scanner
 
 **Requirement**:
 Một chương trình mà Component cần để cài hoặc để chạy, ví dụ node hoặc python. dotcode cung cấp nó riêng cho Component, không đưa lên PATH chung của user.
-_Avoid_: runtime (trong dotcode, runtime là nơi chạy service), dependency
+_Avoid_: runtime, dependency
 
 **Store**:
 Nơi chứa các bản cài, mỗi phiên bản của một Component nằm ở một chỗ riêng và không bị sửa sau khi cài.

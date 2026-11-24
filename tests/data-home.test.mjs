@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 for (const mode of ['default', 'environment', 'explicit']) {
-  test(`agent and runtime data directory: ${mode}`, async t => {
+  test(`agent data directory: ${mode}`, async t => {
     const root = await mkdtemp(path.join(tmpdir(), 'dotcode-home-'));
     t.after(() => rm(root, { recursive: true, force: true }));
     const home = path.join(root, 'home');
@@ -19,8 +19,7 @@ for (const mode of ['default', 'environment', 'explicit']) {
     assert.equal(execFileSync(process.execPath, ['--input-type=module', '-e', `
       import assert from 'node:assert/strict';
       import path from 'node:path';
-      import { attachAgent } from './agent.mjs';
-      import { createRuntime } from './runtime.mjs';
+      import { attachAgent } from './server/agent.mjs';
       const directory = ${JSON.stringify(directory) ?? 'undefined'};
       const expected = ${JSON.stringify(expected)};
       const routes = new Map();
@@ -32,8 +31,6 @@ for (const mode of ['default', 'environment', 'explicit']) {
           json(body) { response = body; },
         });
         assert.equal(response.workspace, path.join(expected, 'workspace'));
-        const runtime = createRuntime({ directory, run: async () => { throw new Error('Unexpected command.'); } });
-        assert.equal((await runtime.snapshot()).directory, expected);
       } finally { await stop(); }
     `], { cwd: new URL('..', import.meta.url), env, encoding: 'utf8', timeout: 15000 }), '');
   });

@@ -3,9 +3,9 @@ import test from 'node:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createInstaller } from '../installer.mjs';
+import { createInstaller } from '../server/installer.mjs';
 import express from 'express';
-import { attachAgent } from '../agent.mjs';
+import { attachAgent } from '../server/agent.mjs';
 
 const commit = 'a'.repeat(40);
 const metadata = { full_name: 'example/review', name: 'review', description: 'Review code.', language: 'TypeScript', stargazers_count: 42, topics: ['code-review'], owner: { avatar_url: 'https://avatars.githubusercontent.com/u/42?v=4' } };

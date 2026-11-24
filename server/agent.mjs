@@ -6,7 +6,6 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { createRuntime } from './runtime.mjs';
 import { createInstaller } from './installer.mjs';
 import { githubRepo } from './github.mjs';
 
@@ -311,11 +310,10 @@ export function attachAgent(app, {
   fetchRelease = globalThis.fetch,
   fetchDocumentation = globalThis.fetch,
   desktopDataHome = process.env.XDG_DATA_HOME || path.join(homedir(), '.local', 'share'),
-  runtimeOptions = {},
   installerOptions = {},
 } = {}) {
   directory = path.resolve(directory);
-  const appDirectory = fileURLToPath(new URL('.', import.meta.url));
+  const appDirectory = fileURLToPath(new URL('..', import.meta.url));
   const protectedDirectories = [appDirectory, path.join(homedir(), 'nix-dev', 'nixos-conf')];
   const checkDirectory = target => {
     if (protectedDirectories.some(protectedPath => contains(protectedPath, target) || contains(target, protectedPath))) {
@@ -324,7 +322,6 @@ export function attachAgent(app, {
   };
   checkDirectory(directory);
   const plans = new Map();
-  const runtime = createRuntime({ ...runtimeOptions, directory });
   const installer = createInstaller({ ...installerOptions, directory });
   const controllers = new Set();
   let busy = false;
@@ -516,36 +513,6 @@ export function attachAgent(app, {
     busy = true;
     try { res.json(await installer.execute(req.body.planId)); }
     catch (error) { installerFailure(res, error); }
-    finally { busy = false; }
-  });
-
-  app.get('/api/runtime', async (_req, res) => {
-    res.setHeader('cache-control', 'no-store');
-    try { await prepare(); res.json(await runtime.snapshot()); }
-    catch (error) { res.status(400).json({ error: error.message }); }
-  });
-
-  app.get('/api/runtime/logs', async (req, res) => {
-    res.setHeader('cache-control', 'no-store');
-    try {
-      await prepare();
-      if (typeof req.query.id !== 'string') throw new Error('Service ID required.');
-      res.json({ logs: await runtime.logs(req.query.id) });
-    } catch (error) { res.status(400).json({ error: error.message }); }
-  });
-
-  app.post('/api/runtime/plan', async (req, res) => {
-    if (busy || initializingCatalog) return res.status(409).json({ error: 'Another task is running. Wait for it to finish.' });
-    try { await prepare(); res.json(await runtime.plan(req.body)); }
-    catch (error) { res.status(400).json({ error: error.message }); }
-  });
-
-  app.post('/api/runtime/execute', async (req, res) => {
-    if (busy || initializingCatalog) return res.status(409).json({ error: 'Another task is running. Wait for it to finish.' });
-    if (typeof req.body?.planId !== 'string') return res.status(400).json({ error: 'An approved plan ID is required.' });
-    busy = true;
-    try { await prepare(); res.json(await runtime.execute(req.body.planId)); }
-    catch (error) { res.status(400).json({ error: error.message }); }
     finally { busy = false; }
   });
 
@@ -827,5 +794,5 @@ export function attachAgent(app, {
       res.end();
     }
   });
-  return async () => { for (const controller of controllers) controller.abort(); await runtime.close(); };
+  return async () => { for (const controller of controllers) controller.abort(); };
 }

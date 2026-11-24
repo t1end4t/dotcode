@@ -70,3 +70,4 @@ package-lock.json
 .devenv/
 .direnv/
 frontend/dist/
+.scratch/

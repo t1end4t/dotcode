@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const page = process.argv[2];
-assert.ok(page, 'Usage: node frontend/prototype/check-ui.mjs <browserPageId>');
+assert.ok(page, 'Usage: node tests/check-ui.mjs <browserPageId>');
 const cli = process.env.ORCA_CLI_COMMAND || 'orca-ide';
 function command(...args) {
   const result = JSON.parse(execFileSync(cli, [...args, '--page', page, '--json'], { encoding: 'utf8' }));
@@ -38,7 +38,7 @@ const checked = name => evaluate(`return document.querySelector('[role="switch"]
 const origin = evaluate(`return location.origin;`);
 assert.equal(origin, 'http://127.0.0.1:5174', 'Refuse to test the backend-connected app');
 command('reload');
-assert.equal(evaluate(`return !!document.querySelector('script[type="module"][src="/prototype/main.tsx"], script[type="module"][src="/main.tsx"]');`), true, 'Refuse to test a UI other than the in-memory prototype');
+assert.equal(evaluate(`return !!document.querySelector('script[type="module"][src="/src/main.tsx"]');`), true, 'Refuse to test a UI other than the in-memory prototype');
 command('wait', '--selector', '.tool-card');
 if (process.argv[3]) command('exec', '--command', `set viewport ${process.argv[3]} ${process.argv[4] || 844}`);
 assert.equal(evaluate(`return document.documentElement.lang;`), 'en');
