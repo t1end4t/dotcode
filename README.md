@@ -103,7 +103,7 @@ Set environment variables when starting the server. See `.env.example` for basic
 
 ## Development
 
-Built with React, TypeScript, Vite, Express, and the Codex SDK. Server code is in `server/`, the UI in `frontend/src/`.
+Built with React, TypeScript, Vite, Express, and the Codex SDK. Server code is in `backend/`, the UI in `frontend/src/`.
 
 ### Library UI
 
@@ -126,7 +126,7 @@ browser fixtures cover search recovery, stale responses and Add without writing 
 | `npm run build` | Type-check the frontend and tests, then bundle the frontend. |
 | `npm start` | Serve the production build. |
 
-`server/server.ts` is the server entry point; `server/instructions.md` defines the assistant's policy. `frontend/src/` contains the UI. `tests/` contains regression tests.
+`backend/server.ts` is the server entry point; `backend/instructions.md` defines the assistant's policy. `frontend/src/` contains the UI. `tests/` contains regression tests.
 
 Production still needs the server source and dependencies. The build does not type-check the server.
 

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('Nix lifecycle policy requires durable roots and safe replacement', async () => {
-  const policy = await readFile(new URL('../server/instructions.md', import.meta.url), 'utf8');
+  const policy = await readFile(new URL('../backend/instructions.md', import.meta.url), 'utf8');
   assert.match(policy, /nix-store --realise.*--add-root.*--indirect/);
   assert.match(policy, /Keep the previous root until.*verification succeeds/);
   assert.match(policy, /nix-store --query --roots/);

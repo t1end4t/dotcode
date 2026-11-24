@@ -19,7 +19,7 @@ for (const mode of ['default', 'environment', 'explicit']) {
     assert.equal(execFileSync(process.execPath, ['--input-type=module', '-e', `
       import assert from 'node:assert/strict';
       import path from 'node:path';
-      import { attachAgent } from './server/agent.mjs';
+      import { attachAgent } from './backend/agent.mjs';
       const directory = ${JSON.stringify(directory) ?? 'undefined'};
       const expected = ${JSON.stringify(expected)};
       const routes = new Map();

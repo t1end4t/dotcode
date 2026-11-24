@@ -17,7 +17,7 @@ test('development opens the browser and serves HMR at the listening HTTP address
       console.log('BROWSER_OPEN:' + url);
     });
   `);
-  const child = spawn(process.execPath, ['--import', 'tsx', 'server/server.ts'], {
+  const child = spawn(process.execPath, ['--import', 'tsx', 'backend/server.ts'], {
     cwd: new URL('..', import.meta.url),
     env: { ...process.env, NODE_ENV: 'development', PORT: '0', DOTCODE_HOME: directory, BROWSER: browser },
     stdio: ['ignore', 'pipe', 'pipe'],

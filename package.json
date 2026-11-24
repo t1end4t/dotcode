@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch server/server.ts",
+    "dev": "tsx watch backend/server.ts",
     "build": "tsc --noEmit -p frontend/tsconfig.json && vite build frontend",
-    "start": "NODE_ENV=production tsx server/server.ts",
+    "start": "NODE_ENV=production tsx backend/server.ts",
     "lint": "tsc --noEmit -p frontend/tsconfig.json",
     "test": "node --import tsx --test tests/*.test.*",
     "test:watch": "node --import tsx --test --watch tests/*.test.*"

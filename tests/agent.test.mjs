@@ -4,7 +4,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import express from 'express';
-import { attachAgent as attachAgentWithOptions, isLocalRequest, validateResult } from '../server/agent.mjs';
+import { attachAgent as attachAgentWithOptions, isLocalRequest, validateResult } from '../backend/agent.mjs';
 
 const attachAgent = (app, options) => attachAgentWithOptions(app, { fetchDocumentation: async () => new Response(null, { status: 404 }), ...options });
 
