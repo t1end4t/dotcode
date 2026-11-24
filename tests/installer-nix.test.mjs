@@ -18,9 +18,13 @@ async function fixture(t, options = {}) {
   const directory = path.join(root, 'data');
   const output = path.join(root, 'nix-store/hello-1.0');
   const calls = [];
-  const run = async (program, args) => {
+  const run = async (program, args, { cwd }) => {
     calls.push([program, args]);
     if (program === 'gh') return { stdout: '' };
+    if (options.skill && program === 'git') {
+      if (args.includes('checkout')) await writeFile(path.join(cwd, 'SKILL.md'), '# Hello');
+      return { stdout: args.includes('rev-parse') ? `${commit}\n` : '' };
+    }
     assert.equal(program, 'nix');
     if (args[0] === 'search') {
       if (options.searchError) throw new Error('nixpkgs unavailable');
@@ -44,7 +48,10 @@ async function fixture(t, options = {}) {
   };
   const fetchRemote = async url => new Response(JSON.stringify(url.includes('/commits/')
     ? { sha: commit }
-    : { tree: options.flake === false ? [] : [{ path: 'flake.nix', type: 'blob', mode: '100644' }] }));
+    : { tree: [
+        ...(options.flake === false ? [] : [{ path: 'flake.nix', type: 'blob', mode: '100644' }]),
+        ...(options.skill ? [{ path: 'SKILL.md', type: 'blob', mode: '100644' }] : []),
+      ] }));
   const installer = createInstaller({ directory, home, run, fetchRemote, searchPath: path.join(home, '.local/bin'), ...options });
   const install = async (type = 'flake') => {
     const { candidates } = await installer.detect({ githubUrl });
@@ -142,6 +149,44 @@ test('fallback wrapper directory and PATH guidance survive restart without movin
   await restarted.execute((await restarted.plan({ action: 'disable', componentId: receipt.id })).id);
   await restarted.execute((await restarted.plan({ action: 'enable', componentId: receipt.id })).id);
   assert.match(await readFile(receipt.activations.cli.path, 'utf8'), /managed-by: dotcode/);
+});
+
+test('a shared Receipt file keeps the Store and Activation rules for each Kind', async t => {
+  const { installer, install, directory, home } = await fixture(t, { skill: true });
+  const request = { action: 'install', githubUrl };
+  const implicit = await installer.plan(request);
+  const explicit = await installer.plan({ ...request, recipe: { backend: 'files' } });
+  assert.equal(explicit.componentId, implicit.componentId);
+  await assert.rejects(installer.plan({ ...request, recipe: { backend: 'mise' } }), { code: 'INVALID_INPUT', message: 'Unsupported Backend.' });
+  await installer.execute(explicit.id);
+  await install();
+
+  const restarted = createInstaller({ directory, home });
+  const { receipts: [skill, cli] } = await restarted.snapshot();
+  assert.deepEqual([skill.kind, cli.kind], ['skill', 'cli']);
+  assert.deepEqual([skill.status, cli.status], ['enabled', 'enabled']);
+  assert.notEqual(skill.id, cli.id);
+  await restarted.execute((await restarted.plan({ action: 'disable', componentId: skill.id, agent: 'codex' })).id);
+  await assert.rejects(readlink(skill.activations.codex.path), { code: 'ENOENT' });
+  assert.equal(await readlink(skill.activations.claude.path), skill.storePath);
+  assert.match(await readFile(cli.activations.cli.path, 'utf8'), /managed-by: dotcode/);
+
+  const receiptFile = path.join(directory, 'receipts.json');
+  const saved = JSON.parse(await readFile(receiptFile, 'utf8'));
+  for (const [index, field, value] of [
+    [0, 'storePath', cli.storePath],
+    [1, 'storePath', skill.storePath],
+    [0, 'activations', { ...skill.activations, claude: cli.activations.cli }],
+    [1, 'activations', { cli: skill.activations.claude }],
+  ]) {
+    const corrupt = structuredClone(saved);
+    corrupt.receipts[index][field] = value;
+    const raw = JSON.stringify(corrupt);
+    await writeFile(receiptFile, raw);
+    await assert.rejects(restarted.snapshot(), /Invalid stored Receipt/);
+    await assert.rejects(restarted.plan({ action: 'uninstall', componentId: saved.receipts[index].id }), /Invalid stored Receipt/);
+    assert.equal(await readFile(receiptFile, 'utf8'), raw);
+  }
 });
 
 test('nixpkgs install pins its revision and all external commands stay within the Nix and GitHub boundaries', async t => {
