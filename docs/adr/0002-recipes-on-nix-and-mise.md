@@ -1,21 +1,11 @@
-# Recipe dạng dữ liệu chạy trên các Backend Nix và mise, v1 chỉ cho NixOS
+# Một luồng cài theo Recipe trên NixOS
 
-Hiện tại AI tự viết `install.sh`, `update.sh`, `uninstall.sh`, `verify.sh` cho mỗi app. Cách này tốn nhiều bước, kết quả không ổn định, và nghiêng về một vài cách cài (AppImage, Nix) bất kể README của repo khuyên gì. Từ nay, mỗi Component được cài bằng một Recipe dạng dữ liệu, và dotcode thực thi Recipe đó bằng code cố định của từng Backend.
+Luồng cũ để AI viết `install.sh`, `update.sh`, `uninstall.sh`, `verify.sh` riêng cho mỗi app. Cách đó tốn nhiều bước và kết quả không ổn định. DotCode dùng chung một installer để thực thi Recipe, tạo Activation và ghi Receipt.
 
-- Recipe ghi **nguồn để theo dõi bản mới**. Receipt ghi **đúng bản đã cài**.
-- Pin khoá Recipe vào một phiên bản.
-
-## Các Backend trong v1, xếp theo thứ tự ưu tiên trên NixOS
-
-| Backend | Dùng cho |
-|---|---|
-| `files` | skill, MCP, instruction. Git checkout vào Store, ghim commit |
-| `nix` | flake của repo, hoặc gói trong nixpkgs. Out-link trong Store chính là gc-root |
-| `mise` | CLI từ GitHub release (`github:`, `aqua:`) và package của ngôn ngữ (`npm:`, `pypi:`, `cargo:`, `go:`) |
-| `appimage` | desktop app (AppImage, tarball). Phải khớp digest nếu GitHub có cung cấp. Chạy qua `appimage-run` |
-| `script` | AI viết script, chỉ khi không Backend nào khác dùng được. Script chỉ được ghi vào Store; Activation và Receipt vẫn do dotcode làm |
-
-Thứ tự trên NixOS là `nix` → `mise` → `script`. Cách cài mà README khuyên là tín hiệu mạnh khi xếp hạng, nhưng được chuyển sang Backend cô lập tương ứng. Ví dụ `pip install` → `mise pypi:`.
+- Recipe mô tả nguồn để lấy và theo dõi bản mới, Requirement khi cài hoặc chạy, bước build/chuẩn bị của repo nếu cần, và thông tin để tạo Activation. Receipt ghi đúng bản đã cài; Pin khoá Recipe vào một phiên bản.
+- Một tích hợp mise xử lý CLI từ GitHub Release, npm, PyPI, Cargo và Go. Khi cả mise và Nix có Recipe phù hợp cho cùng CLI, Detector xếp mise trước và AI ưu tiên Recipe đó. Dùng Nix nếu chỉ có flake/nixpkgs hoặc không có Recipe mise tương thích. Checkout file đã ghim commit và tải AppImage hoặc tarball trực tiếp vẫn là các cách lấy bản cài trong cùng luồng.
+- Tách điều kiện để chạy khỏi cách lấy bản cài. Nếu CLI npm cần Node thì thêm Requirement, không viết lại cách cài. AppImage phải khớp digest nếu nguồn cung cấp; wrapper do DotCode sinh gọi `appimage-run` mà không thay đổi bản tải về.
+- Recipe có thể mô tả bước build/chuẩn bị, ưu tiên lệnh có sẵn của repo. Chưa quyết định cho AI sinh hoặc chạy shell tùy ý; đổi thư mục làm việc sang Store không phải sandbox.
 
 ## Cách Nix và mise phối hợp
 
@@ -38,5 +28,5 @@ dotcode dùng một **bản mise riêng**:
 
 - **nix-ld là thông tin máy, không phải giả định.** Detector kiểm tra nix-ld có được bật không. Có thì wrapper gọi binary link động trực tiếp; không có thì chạy qua `nix-alien`. Nix vẫn cung cấp Requirement trong cả hai trường hợp, để Recipe chạy được trên máy không bật nix-ld.
 - **v1 chỉ nhắm tới NixOS.** Schema của Recipe vẫn có khoá theo nền tảng. Phần cho máy không có Nix (mise tự cài Requirement, tải mise bản static) và macOS/Windows để sau.
-- **App cũ đang có `install.sh` và các script khác thì tạm thời để nguyên.** v1 không tự chuyển, cũng không có nút chuyển sang Recipe. Sau này có thể gắn chúng vào Backend `script`, hoặc chuyển dần sang Recipe bằng cách cài song song rồi gỡ bản cũ.
+- **App cũ không có Receipt là Unmanaged.** DotCode không chạy lifecycle script cũ và không tự chuyển sang Recipe. Nếu bản cũ chặn cài mới, user xử lý xung đột trước khi thử lại.
 - **Với `mcp`, Component có thể là một lệnh `npx`/`uvx` đã ghim phiên bản**, không cần Store. Activation khi đó chỉ là một entry trong config của agent.

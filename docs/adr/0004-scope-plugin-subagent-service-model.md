@@ -13,11 +13,13 @@ Máy được quản lý bằng hai nơi: `nixos-conf` (NixOS + Home Manager) v�
 - **Cả plugin là một Component.** Plugin tự quản skills, agents, hooks và MCP bên trong; dotcode không tách ra. Marketplace có nhiều plugin thì mỗi plugin là một Component.
 - **Plugin chỉ Activation cho agent khớp manifest:** `.claude-plugin/plugin.json` cho Claude, `.codex-plugin/plugin.json` cho Codex.
 - **Runtime LLM (llama.cpp, ollama, vllm) là `cli`** có biến thể, cộng thêm `service` khi chạy làm server.
-- **Trạng thái của service** gồm `systemctl --user is-active`, port trong Receipt có đang listen không, và log từ `journalctl`. Port đang bị process khác chiếm thì báo xung đột trước khi start.
+- **Service có ba điều khiển:** enable/disable tạo/gỡ unit; start/stop điều khiển tiến trình; autostart mặc định bật khi service được enable, áp dụng khi user đăng nhập mà không cần mở DotCode. Chạy từ lúc boot trước khi đăng nhập cần linger cấu hình bên ngoài DotCode. Trạng thái chạy, port và log độc lập với trạng thái Activation. Kiểm tra xung đột port trước khi chạy.
+- **Service tham chiếu một CLI:** không tắt hoặc gỡ CLI khi còn service dùng. Update/rollback CLI dừng các service đang chạy trước khi chuyển bản và chạy lại sau đó. Gỡ riêng service không gỡ bản cài CLI.
+- **Config agent:** ưu tiên CLI chính thức. Nếu phải sửa file, chỉ sửa mục do DotCode sở hữu và giữ nguyên nội dung khác, kể cả comment. Từ chối ghi config do Nix/Home Manager quản lý.
 
 ## Secret của service
 
-dotcode không lưu, không hiện và không gửi cho AI giá trị của secret. Recipe chỉ ghi tên các biến cần có. Khi install, dotcode tạo file `~/.config/dotcode/secrets/<service>.env` quyền `0600`, mỗi biến một dòng `KEY=`; user tự điền giá trị. dotcode chỉ đọc file để biết key nào còn thiếu, và chặn start khi còn thiếu. Unit đọc file qua `EnvironmentFile=`.
+dotcode không lưu, không hiện và không gửi cho AI giá trị của secret. Recipe chỉ ghi tên các biến cần có. Khi install, dotcode tạo file `~/.config/dotcode/secrets/<service>.env` quyền `0600`, mỗi biến một dòng `KEY=`; user tự điền giá trị. dotcode chỉ đọc file để biết key nào còn thiếu, và chặn start khi còn thiếu. Unit đọc file qua `EnvironmentFile=`. Không ghi đè file đã có. Khi uninstall, giữ file trừ khi user chọn xoá dữ liệu.
 
 Không mã hoá trong v1: máy chưa có sops hay agenix. `systemd-creds` và gnome-keyring bị bỏ vì service thường đọc secret từ biến môi trường, nên mỗi service cần thêm wrapper; keyring còn chỉ mở sau khi user đăng nhập. Khi `nixos-conf` có sops hoặc agenix, unit chỉ cần trỏ `EnvironmentFile=` sang file do Nix giải mã.
 
@@ -32,7 +34,7 @@ Model được đăng ký tại chỗ trong `DOTCODE_MODELS` (mặc định `~/L
 
 ## Unmanaged
 
-dotcode quét chỉ đọc: PATH, unit trong `~/.config/systemd/user/`, thư mục skill và agent, plugin đã cài. Mọi thứ trỏ vào `/nix/store` thuộc Nix và bị loại. Phần còn lại không có Receipt là Unmanaged. Muốn chuyển sang dotcode thì cài bản mới song song, user xác nhận bản mới chạy được, rồi mới gỡ bản cũ. dotcode không ghi Receipt cho thứ nó không tự cài, vì như vậy không uninstall sạch được. Unit `dotcode-9router.service` do luồng Runtime cũ tạo cũng là Unmanaged.
+dotcode quét chỉ đọc: PATH, unit trong `~/.config/systemd/user/`, thư mục skill và agent, plugin đã cài. Mọi thứ trỏ vào `/nix/store` thuộc Nix và bị loại. Phần còn lại không có Receipt là Unmanaged. Nếu bản cũ xung đột với bản mới, DotCode báo để user tự xử lý trước khi cài lại. DotCode không nhận quản lý thứ không có Receipt và không chạy lifecycle script cũ. Unit `dotcode-9router.service` do luồng Runtime cũ tạo cũng là Unmanaged.
 
 ## Các phương án đã cân nhắc
 

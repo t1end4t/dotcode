@@ -6,7 +6,7 @@ Mọi Kind (`cli`, `desktop-app`, `skill`, `mcp`, `plugin`, `subagent`, `service
 - dotcode tạo Activation để đưa bản cài ra chỗ dùng.
 - Receipt ghi lại cả hai.
 
-Nhờ vậy, mọi thao tác trên Component đều làm bằng code cố định, không cần AI và không phụ thuộc vào việc Component được cài bằng Backend nào:
+Installer thực thi các thao tác trên Component bằng code cố định. AI chọn cách cài và đề xuất Plan (ADR 0003), nhưng không tự thực thi:
 
 | Thao tác | Cách làm |
 |---|---|

@@ -23,12 +23,8 @@ _Avoid_: type, category (category dùng để sắp xếp Card)
 ## Cài đặt
 
 **Recipe**:
-Mô tả bằng dữ liệu cách cài một Component: dùng Backend nào, lấy từ nguồn nào, theo dõi bản mới ra sao. Recipe không phải là script.
+Mô tả bằng dữ liệu cách lấy, chuẩn bị và đưa một Component vào sử dụng, gồm nguồn, Requirement và thông tin cần để tạo Activation.
 _Avoid_: install plan, install script
-
-**Backend**:
-Cách cài mà dotcode biết thực thi, mỗi Backend chạy được một loại Recipe: `files`, `nix`, `mise`, `appimage`, `script`.
-_Avoid_: installer, method, provider
 
 **Detector**:
 Phần của dotcode đọc một repo và thông tin về máy, rồi đưa ra các Recipe ứng viên đã được xếp hạng.
@@ -51,7 +47,7 @@ Bản ghi của dotcode về một Component đã cài: Recipe đã dùng, đún
 _Avoid_: install record, inventory entry
 
 **Plan**:
-Một thao tác thay đổi đã được dotcode chuẩn bị và đang chờ user duyệt. Chỉ user duyệt được Plan, AI không duyệt được.
+Một thao tác thay đổi đã được dotcode chuẩn bị. Plan do AI đề xuất phải được user duyệt; AI không duyệt được Plan.
 _Avoid_: proposal, pending action
 
 **Pin**:
