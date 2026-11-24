@@ -40,8 +40,6 @@ export async function executeInstallerAction(body: Record<string, unknown>) {
 }
 
 export function SkillControls({ item, onChanged, onLegacyInstall }: { item: ManageableItem; onChanged: () => Promise<void>; onLegacyInstall: () => void }) {
-  // ponytail: select one detected skill automatically; add a Component picker for multi-skill repos.
-  const subpath = item.detection?.skillPaths.length === 1 ? item.detection.skillPaths[0] : '';
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const receipts = item.installedSkills ?? [];
@@ -53,7 +51,7 @@ export function SkillControls({ item, onChanged, onLegacyInstall }: { item: Mana
       await executeInstallerAction(body);
       await onChanged();
     } catch (failure) {
-      if (failure instanceof Error && 'code' in failure && failure.code === 'NOT_SKILL' && !subpath && body.action === 'install') onLegacyInstall();
+      if (failure instanceof Error && 'code' in failure && failure.code === 'NOT_SKILL' && !item.detection?.skillPaths.length && body.action === 'install') onLegacyInstall();
       else setError(failure instanceof Error ? failure.message : 'Installer request failed.');
     } finally { setWorking(false); }
   };
@@ -69,7 +67,7 @@ export function SkillControls({ item, onChanged, onLegacyInstall }: { item: Mana
       {receipt.error && <p role="alert" className="text-xs text-(--ctp-red)">{receipt.error}</p>}
     </div>) : <>
       <button type="button" disabled={working} className={`rt-button ${item.installed ? '' : 'rt-primary'}`}
-        onClick={() => item.installed ? onLegacyInstall() : void apply({ action: 'install', githubUrl: item.githubUrl, subpath: subpath.trim() })}>
+        onClick={() => item.installed ? onLegacyInstall() : void apply({ action: 'install', githubUrl: item.githubUrl })}>
         {working ? 'Working…' : item.installed ? 'Uninstall' : 'Install'}
       </button>
     </>}

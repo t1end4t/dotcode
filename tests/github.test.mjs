@@ -129,11 +129,15 @@ test('Detector badges use manifests, release assets and topics, including unknow
 test('HTTP Add persists Detector metadata, deduplicates canonical repos and never calls AI', async t => {
   const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-add-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
+  let offline = false;
   const app = express().use(express.json());
   const stop = attachAgent(app, { directory, createCodex: () => { throw new Error('AI must not be called'); }, installerOptions: {
-    env: { GITHUB_TOKEN: 'http-test-secret' }, run: async () => ({ stdout: '' }), fetchRemote: async url => Response.json(url.includes('/search/') ? { items: [metadata] } : url.includes('/commits/') ? { sha: commit }
-      : url.includes('/git/trees/') ? { tree: [{ path: 'SKILL.md', type: 'blob', mode: '100644' }] }
-      : url.endsWith('/releases/latest') ? { published_at: '2026-11-20T12:00:00Z', assets: [] } : metadata),
+    env: { GITHUB_TOKEN: 'http-test-secret' }, run: async () => ({ stdout: '' }), fetchRemote: async url => {
+      if (offline) throw new Error('GitHub became unavailable after search');
+      return Response.json(url.includes('/search/') ? { items: [metadata] } : url.includes('/commits/') ? { sha: commit }
+        : url.includes('/git/trees/') ? { tree: [{ path: 'SKILL.md', type: 'blob', mode: '100644' }] }
+        : url.endsWith('/releases/latest') ? { published_at: '2026-11-20T12:00:00Z', assets: [] } : metadata);
+    },
   } });
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
@@ -144,6 +148,7 @@ test('HTTP Add persists Detector metadata, deduplicates canonical repos and neve
   assert.equal(search.status, 200);
   assert.equal(search.headers.get('cache-control'), 'no-store');
   assert.equal((await search.json()).results[0].repo, 'example/review');
+  offline = true;
   const response = await add('https://github.com/Example/Review.git/');
   assert.equal(response.status, 201);
   const { item } = await response.json();
@@ -192,7 +197,7 @@ test('Install reuses saved detection for 24 hours, then refreshes and persists i
     fetchRemote: async url => {
       requests.push(url);
       return Response.json(url.includes('/commits/') ? { sha: revision }
-        : url.includes('/git/trees/') ? { tree: [{ path: 'SKILL.md', type: 'blob', mode: '100644' }] }
+        : url.includes('/git/trees/') ? { tree: [{ path: revision === commit ? 'SKILL.md' : 'skills/review/SKILL.md', type: 'blob', mode: '100644' }] }
         : url.endsWith('/releases/latest') ? { assets: [] } : metadata);
     },
   } });
@@ -216,5 +221,6 @@ test('Install reuses saved detection for 24 hours, then refreshes and persists i
   assert.ok(requests.some(url => url.includes('/commits/')));
   const { items } = await (await fetch(base + '/api/catalog')).json();
   assert.equal(items[0].detection.commit, revision);
+  assert.deepEqual(items[0].detection.skillPaths, ['skills/review']);
   assert.equal(items[0].detection.checkedAt, '2026-11-22T12:00:00.001Z');
 });

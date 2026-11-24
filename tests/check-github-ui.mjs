@@ -89,7 +89,7 @@ try {
   evaluate('document.querySelector(\'.tool-card[aria-label="review"] .rt-button\').click(); return true;');
   command('wait', '--selector', '.tool-card[aria-label="review"] .rt-button:not(:disabled)');
   assert.deepEqual(evaluate('return window.__installRequests;'), [
-    ['/api/installer/plan', { action: 'install', githubUrl: 'https://github.com/example/review', subpath: 'skills/review' }],
+    ['/api/installer/plan', { action: 'install', githubUrl: 'https://github.com/example/review' }],
     ['/api/installer/execute', { planId: 'fixture-plan' }],
   ]);
   console.log('GitHub UI checks passed.');

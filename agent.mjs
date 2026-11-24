@@ -473,13 +473,20 @@ export function attachAgent(app, {
     try { res.json(await installer.snapshot()); }
     catch (error) { installerFailure(res, error); }
   });
+  // ponytail: keep only the latest search batch; retain per-tab results if concurrent searches become common.
+  let searchCards = [];
   app.get('/api/installer/search', async (req, res) => {
-    try { res.json(await installer.search(req.query.q)); }
+    try {
+      const result = await installer.search(req.query.q);
+      searchCards = result.results;
+      res.json(result);
+    }
     catch (error) { installerFailure(res, error); }
   });
   app.post('/api/installer/plan', async (req, res) => {
     busy = true;
     try {
+      let body = req.body;
       let detection;
       if (req.body?.action === 'install') {
         const cards = await loadCatalog() ?? [];
@@ -489,9 +496,12 @@ export function attachAgent(app, {
           const refreshed = await installer.refreshDetection(card);
           if (refreshed !== card) await save(validateCatalog(cards.map(entry => entry === card ? refreshed : entry)), catalogPath);
           detection = refreshed.detection;
+          if (body.subpath === undefined && (body.ref ?? 'HEAD') === 'HEAD' && detection.skillPaths.length === 1) {
+            body = { ...body, subpath: detection.skillPaths[0] };
+          }
         }
       }
-      res.json(await installer.plan(req.body, detection));
+      res.json(await installer.plan(body, detection));
     } catch (error) { installerFailure(res, error); }
     finally { busy = false; }
   });
@@ -606,7 +616,7 @@ export function attachAgent(app, {
       const items = await loadCatalog() ?? [];
       const existing = items.find(item => githubRepo(item.githubUrl) === repo);
       if (existing) return res.json({ item: existing });
-      const candidate = await installer.inspect(`https://github.com/${repo}`);
+      const candidate = searchCards.find(card => card.repo === repo) ?? await installer.inspect(`https://github.com/${repo}`);
       const redirected = items.find(item => catalogKey(item.githubUrl) === catalogKey(candidate.githubUrl));
       if (redirected) return res.json({ item: redirected });
       const updated = validateCatalog([...items, candidate]);
