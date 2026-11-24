@@ -185,6 +185,18 @@ export function createGithub({ fetchRemote = globalThis.fetch, run = promisify(e
     repository: async (githubUrl, ref) => repository(githubRepo(githubUrl), await token(), ref),
     detect: async (githubUrl, topics, ref) => detectRepo(githubRepo(githubUrl), await token(), topics, ref),
     inspect: async githubUrl => inspectRepo(githubRepo(githubUrl), await token()),
+    info: async githubUrl => {
+      const repo = githubRepo(githubUrl);
+      const credential = await token();
+      const [metadata, readme] = await Promise.all([request(`/repos/${repo}`, credential), request(`/repos/${repo}/readme`, credential, true)]);
+      const text = typeof readme?.content === 'string' ? Buffer.from(readme.content, 'base64').toString('utf8') : null;
+      return {
+        repo: { repo, githubUrl: `https://github.com/${repo}`, description: metadata?.description ?? '', topics: repoTopics(metadata), primaryLanguage: metadata?.language ?? null,
+          stars: metadata?.stargazers_count ?? 0, license: metadata?.license?.spdx_id ?? null, homepage: metadata?.homepage || null, archived: Boolean(metadata?.archived), pushedAt: metadata?.pushed_at ?? null },
+        // ponytail: README capped at 100k characters; page it when agents need longer docs.
+        readme: text === null ? null : text.slice(0, 100000),
+      };
+    },
     search: async query => {
       if (typeof query !== 'string' || !query.trim() || query.length > 256) throw Object.assign(new Error('Enter a search keyword or GitHub repository URL (up to 256 characters).'), { code: 'INVALID_INPUT' });
       query = query.trim();
