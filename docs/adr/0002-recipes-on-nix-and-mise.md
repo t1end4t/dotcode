@@ -36,6 +36,7 @@ dotcode dùng một **bản mise riêng**:
 
 ## Hệ quả
 
+- **nix-ld là thông tin máy, không phải giả định.** Detector kiểm tra nix-ld có được bật không. Có thì wrapper gọi binary link động trực tiếp; không có thì chạy qua `nix-alien`. Nix vẫn cung cấp Requirement trong cả hai trường hợp, để Recipe chạy được trên máy không bật nix-ld.
 - **v1 chỉ nhắm tới NixOS.** Schema của Recipe vẫn có khoá theo nền tảng. Phần cho máy không có Nix (mise tự cài Requirement, tải mise bản static) và macOS/Windows để sau.
 - **App cũ đang có `install.sh` và các script khác thì tạm thời để nguyên.** v1 không tự chuyển, cũng không có nút chuyển sang Recipe. Sau này có thể gắn chúng vào Backend `script`, hoặc chuyển dần sang Recipe bằng cách cài song song rồi gỡ bản cũ.
 - **Với `mcp`, Component có thể là một lệnh `npx`/`uvx` đã ghim phiên bản**, không cần Store. Activation khi đó chỉ là một entry trong config của agent.
