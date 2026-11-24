@@ -16,7 +16,7 @@ export type SkillReceipt = {
 export function mergeInstallerReceipts(items: ManageableItem[], receipts: SkillReceipt[]): ManageableItem[] {
   const key = (url: string) => url.replace(/\/$/, '').replace(/\.git$/, '').toLowerCase();
   return items.map(item => {
-    const installedSkills = receipts.filter(receipt => key(receipt.recipe.source.githubUrl) === key(item.githubUrl));
+    const installedSkills = receipts.filter(receipt => receipt.kind === 'skill' && key(receipt.recipe.source.githubUrl) === key(item.githubUrl));
     return { ...item, installedSkills, ...(installedSkills.length ? { installed: true, currentVersion: installedSkills[0].version.slice(0, 12), hasUpdate: false, updateStatus: undefined } : {}) };
   });
 }

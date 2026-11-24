@@ -193,11 +193,15 @@ test('Install reuses saved detection for 24 hours, then refreshes and persists i
   const requests = [];
   const app = express().use(express.json());
   const stop = attachAgent(app, { directory, installerOptions: {
-    home: directory + '-home', env: {}, now: () => clock, run: async () => ({ stdout: '' }),
+    home: directory + '-home', env: {}, now: () => clock, run: async (program, args) => ({
+      stdout: program === 'nix' && args[0] === 'eval'
+        ? JSON.stringify({ mainProgram: 'review', outputPath: directory + '/nix-output' })
+        : program === 'nix' ? '{}' : '',
+    }),
     fetchRemote: async url => {
       requests.push(url);
       return Response.json(url.includes('/commits/') ? { sha: revision }
-        : url.includes('/git/trees/') ? { tree: [{ path: revision === commit ? 'SKILL.md' : 'skills/review/SKILL.md', type: 'blob', mode: '100644' }] }
+        : url.includes('/git/trees/') ? { tree: [{ path: revision === commit ? 'SKILL.md' : 'skills/review/SKILL.md', type: 'blob', mode: '100644' }, { path: 'flake.nix', type: 'blob', mode: '100644' }] }
         : url.endsWith('/releases/latest') ? { assets: [] } : metadata);
     },
   } });
@@ -223,4 +227,13 @@ test('Install reuses saved detection for 24 hours, then refreshes and persists i
   assert.equal(items[0].detection.commit, revision);
   assert.deepEqual(items[0].detection.skillPaths, ['skills/review']);
   assert.equal(items[0].detection.checkedAt, '2026-11-22T12:00:00.001Z');
+
+  const githubUrl = items[0].githubUrl;
+  const detected = await post('/api/installer/detect', { githubUrl });
+  assert.equal(detected.status, 200);
+  const { candidates: [{ recipe }] } = await detected.json();
+  assert.equal(recipe.backend, 'nix');
+  const cliPlan = await post('/api/installer/plan', { action: 'install', githubUrl, recipe });
+  assert.equal(cliPlan.status, 200);
+  assert.equal((await cliPlan.json()).version, revision);
 });

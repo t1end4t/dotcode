@@ -483,6 +483,12 @@ export function attachAgent(app, {
     }
     catch (error) { installerFailure(res, error); }
   });
+  app.post('/api/installer/detect', async (req, res) => {
+    busy = true;
+    try { res.json(await installer.detect(req.body)); }
+    catch (error) { installerFailure(res, error); }
+    finally { busy = false; }
+  });
   app.post('/api/installer/plan', async (req, res) => {
     busy = true;
     try {
@@ -496,7 +502,7 @@ export function attachAgent(app, {
           const refreshed = await installer.refreshDetection(card);
           if (refreshed !== card) await save(validateCatalog(cards.map(entry => entry === card ? refreshed : entry)), catalogPath);
           detection = refreshed.detection;
-          if (body.subpath === undefined && (body.ref ?? 'HEAD') === 'HEAD' && detection.skillPaths.length === 1) {
+          if (body.recipe?.backend !== 'nix' && body.subpath === undefined && (body.ref ?? 'HEAD') === 'HEAD' && detection.skillPaths.length === 1) {
             body = { ...body, subpath: detection.skillPaths[0] };
           }
         }

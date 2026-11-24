@@ -1224,7 +1224,7 @@ test('installer routes enforce local JSON requests', async t => {
   await new Promise(resolve => server.once('listening', resolve));
   t.after(async () => { server.close(); await stop(); await rm(directory, { recursive: true, force: true }); });
   const base = `http://127.0.0.1:${server.address().port}`;
-  for (const route of ['/api/installer', '/api/installer/plan', '/api/installer/execute']) {
+  for (const route of ['/api/installer', '/api/installer/detect', '/api/installer/plan', '/api/installer/execute']) {
     const options = route === '/api/installer' ? {} : { method: 'POST', body: '{}' };
     assert.equal((await fetch(base + route, { ...options, headers: { origin: 'https://evil.test', 'content-type': 'application/json' } })).status, 403);
     if (route !== '/api/installer') assert.equal((await fetch(base + route, options)).status, 415);
@@ -1251,9 +1251,10 @@ test('installer plans hold the shared busy lock and install only from saved Card
     home: path.join(root, 'home'),
     fetchRemote: async source => {
       if (source.includes('/commits/')) { entered(); await gate; return new Response(JSON.stringify({ sha: commit })); }
-      return new Response(JSON.stringify({ tree: [{ path: 'skill.md', type: 'blob', mode: '100644' }] }));
+      return new Response(JSON.stringify({ tree: ['skill.md', 'flake.nix'].map(file => ({ path: file, type: 'blob', mode: '100644' })) }));
     },
     run: async (_program, args, { cwd }) => {
+      if (args[0] === 'search') return { stdout: '{}' };
       if (args.includes('checkout')) await writeFile(path.join(cwd, 'skill.md'), '# Legacy skill');
       return { stdout: args.includes('rev-parse') ? commit : '' };
     },
@@ -1265,7 +1266,7 @@ test('installer plans hold the shared busy lock and install only from saved Card
   const request = (route, body) => fetch(base + route, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const planning = request('/api/installer/plan', { action: 'install', githubUrl: url });
   await waiting;
-  for (const route of ['/api/runtime/plan', '/api/runtime/execute', '/api/installer/plan', '/api/installer/execute']) {
+  for (const route of ['/api/runtime/plan', '/api/runtime/execute', '/api/installer/detect', '/api/installer/plan', '/api/installer/execute']) {
     assert.equal((await request(route, {})).status, 409, route);
   }
   assert.equal((await fetch(base + '/api/installer')).status, 409);
@@ -1282,4 +1283,10 @@ test('installer plans hold the shared busy lock and install only from saved Card
   const uninstall = await (await request('/api/installer/plan', { action: 'uninstall', componentId: receipt.id })).json();
   assert.equal((await request('/api/installer/execute', { planId: uninstall.id })).status, 200);
   assert.equal(await readFile(path.join(directory, 'catalog.json'), 'utf8'), JSON.stringify([card]));
+  const detection = await request('/api/installer/detect', { githubUrl: url });
+  assert.equal(detection.status, 200);
+  const result = await detection.json();
+  assert.equal(result.candidates[0].recipe.backend, 'nix');
+  assert.equal(result.candidates[0].recipe.source.type, 'flake');
+  assert.equal((await request('/api/installer/detect', { githubUrl: 'file:///tmp/repo' })).status, 400);
 });
