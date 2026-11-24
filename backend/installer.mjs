@@ -1,4 +1,4 @@
-import { createGithub } from './github.mjs';
+import { createGithub, referenceBadge } from './github.mjs';
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
@@ -36,7 +36,6 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
   const receiptFile = path.join(directory, 'receipts.json');
   const pending = new Map();
   let executing = false;
-  const github = createGithub({ fetchRemote, run, now, env });
   const componentId = (value, identity) => createHash('sha256').update(`${value.githubUrl}\n${identity}`).digest('hex').slice(0, 24);
   const storeVersionPath = (store, id, version, outputName = 'out') => path.join(directory, store, id, version + (outputName === 'out' ? '' : `-${outputName}`));
   const validName = name => typeof name === 'string' && /^[\w.+-]{1,100}$/.test(name) && !['.', '..'].includes(name);
@@ -118,15 +117,6 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
   }
 
   const freshDetection = detection => detection && !detection.error && now() - Date.parse(detection.checkedAt) >= 0 && now() - Date.parse(detection.checkedAt) <= 24 * 60 * 60 * 1000;
-
-  async function repository(value) {
-    const repo = value.githubUrl.slice('https://github.com/'.length);
-    const revision = await github.request(`/repos/${repo}/commits/${encodeURIComponent(value.ref)}`);
-    if (!/^[\da-f]{40}$/.test(revision.sha)) throw new Error('GitHub returned an invalid commit.');
-    const tree = await github.request(`/repos/${repo}/git/trees/${revision.sha}?recursive=1`);
-    if (!Array.isArray(tree.tree) || tree.truncated) throw new Error('Cannot detect Components from an incomplete GitHub tree.');
-    return { version: revision.sha, tree: tree.tree };
-  }
 
   async function plan(body, detection) {
     if (!body || !['install', 'enable', 'disable', 'uninstall'].includes(body.action)) throw new InstallerError('INVALID_INPUT', 'Invalid installer action.');
@@ -259,7 +249,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       if (!detection.skillPaths.includes(value.subpath)) throw new InstallerError('NOT_SKILL', 'No SKILL.md or skill.md in that directory.');
       return detection.commit;
     }
-    const { version, tree } = await repository(value);
+    const { version, tree } = await github.repository(value.githubUrl, value.ref);
     const marker = value.subpath ? `${value.subpath}/` : '';
     if (!tree.some(entry => [marker + 'SKILL.md', marker + 'skill.md'].includes(entry.path) && entry.type === 'blob' && ['100644', '100755'].includes(entry.mode))) throw new InstallerError('NOT_SKILL', 'No SKILL.md or skill.md in that directory.');
     return version;
@@ -333,6 +323,22 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
   const wrapper = receipt => `#!/bin/sh\n# managed-by: dotcode\n# component: ${receipt.id}\nexec ${shellQuote(path.join(receipt.storePath, 'bin', receipt.name))} "$@"\n`;
 
   const nixJSON = async args => JSON.parse((await run('nix', args, { timeout: 120000, maxBuffer: 4 * 1024 * 1024 })).stdout);
+  const nixPackage = (reference, flake) => nixJSON(['eval', '--json', reference, '--apply',
+    'p: assert (p.type or null) == "derivation"; { mainProgram = p.meta.mainProgram or null; pname = p.pname or null; outputName = (p.bin or p).outputName or "out"; outputPath = (p.bin or p).outPath; }',
+    ...(flake ? ['--no-accept-flake-config', '--no-write-lock-file', '--option', 'pure-eval', 'true', '--option', 'allow-import-from-derivation', 'false'] : []),
+  ]);
+  const github = createGithub({ fetchRemote, run, now, env, probeFlakeCli: async (repo, commit) => {
+    const reference = `github:${repo}/${commit}`;
+    let metadata;
+    try { metadata = await nixPackage(`${reference}#`, true); }
+    catch (error) {
+      if (error.stderr?.includes(`error: flake '${reference}' does not provide attribute 'packages.`)) return false;
+      throw error;
+    }
+    if (typeof metadata?.outputPath !== 'string' || !path.isAbsolute(metadata.outputPath)) throw new Error('Nix returned an invalid output path.');
+    // ponytail: keep ambiguous default packages as candidates; verify the binary after an approved build.
+    return validName(metadata.mainProgram) || metadata.outputName === 'bin' ? true : 'candidate';
+  } });
   const validAttribute = value => typeof value === 'string' && /^[a-zA-Z_][\w-]*(\.[a-zA-Z_][\w-]*)*$/.test(value);
 
   function nixSource(value) {
@@ -345,12 +351,12 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
 
   async function detect(body) {
     const value = source(body);
-    const { tree, version } = await repository(value);
+    const { detection: { badges, commit: version, error }, warnings } = await github.detect(value.githubUrl, undefined, value.ref);
     const candidates = [];
-    const warnings = [];
+    if (!error && referenceBadge(badges)) return { candidates, version, warnings };
     const candidate = (type, attribute, reason) => ({ kind: 'cli', recipe: { backend: 'nix', source: { ...value, type, attribute } }, reason });
     // ponytail: flake detection offers the default package; enumerate variants when selection is supported.
-    if (!value.subpath && tree.some(entry => entry.path === 'flake.nix' && entry.type === 'blob' && ['100644', '100755'].includes(entry.mode))) {
+    if (!value.subpath && badges.includes('Nix flake')) {
       candidates.push(candidate('flake', '', 'Repository flake takes priority on NixOS.'));
     }
     let packages = {};
@@ -407,7 +413,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       const version = selected.type === 'flake' ? repoVersion : (await nixJSON(['flake', 'metadata', '--json', 'nixpkgs'])).locked?.rev;
       if (!/^[\da-f]{40}$/.test(version)) throw new InstallerError('SOURCE_ERROR', 'Nix returned an invalid revision.');
       const receipt = { id, kind: 'cli', recipe: { backend: cli.backend, source: selected }, version, storePath: cliStorePath(id, version), installedAt: new Date(now()).toISOString() };
-      const metadata = await nixJSON(['eval', '--json', installable(receipt), '--apply', 'p: { mainProgram = p.meta.mainProgram or null; pname = p.pname or null; outputName = (p.bin or p).outputName or "out"; outputPath = (p.bin or p).outPath; }']);
+      const metadata = await nixPackage(installable(receipt), selected.type === 'flake');
       const name = metadata.mainProgram ?? metadata.pname ?? value.githubUrl.split('/').at(-1);
       if (!validName(name)) throw new InstallerError('INVALID_SOURCE', 'Nix package has an invalid CLI name.');
       receipt.name = name;
@@ -430,6 +436,11 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
 
   const kinds = new Map([['skill', skill], ['cli', cli]]);
   return { snapshot, plan, execute, search: github.search, inspect: github.inspect, detect,
-    refreshDetection: async card => freshDetection(card.detection) ? card : { ...card, ...await github.detect(card.githubUrl, card.tags) },
+    refreshDetection: async card => {
+      if (freshDetection(card.detection)) return card;
+      const { detection, latestReleaseAt } = await github.detect(card.githubUrl);
+      if (detection.error) return card;
+      return { ...card, detection, ...(latestReleaseAt !== undefined && { latestReleaseAt }) };
+    },
   };
 }
