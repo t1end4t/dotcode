@@ -165,3 +165,30 @@ Existing files, real directories, foreign symlinks and symlinked parent
 folders cause a conflict; DotCode leaves them untouched. Skills currently
 support regular files and directories. Repositories without a skill marker
 continue through the assistant's existing installation workflow.
+
+### Nix CLI backend
+
+The installer API supports CLI Recipes on NixOS. `POST /api/installer/detect`
+with `{ "githubUrl": "https://github.com/owner/repo" }` returns ordered
+`candidates` with a `recipe` and ranking `reason`: the repository's default
+flake package first, then nixpkgs packages whose source or metadata matches
+the repository. Variant selection is not implemented yet.
+Discovery failures are returned in `warnings`; a failed nixpkgs lookup does
+not prevent installing a detected flake.
+
+Pass the chosen `recipe`, the same `githubUrl`, and `action: "install"` to
+`POST /api/installer/plan`, then pass the returned `id` as `planId` to
+`POST /api/installer/execute`. The Card must already be in the Library.
+Nix installs pin the repository or nixpkgs revision and use `nix build` with
+an out-link under `DOTCODE_HOME/store/nix/`. That out-link is the GC root.
+No Nix profile, sudo, NixOS configuration or Home Manager changes are used.
+
+The CLI wrapper has an ownership marker and calls the Store binary directly.
+It goes in `~/.local/bin` when that directory is on the server's PATH;
+otherwise it goes in `~/.dotcode/bin`, independent of `DOTCODE_HOME`.
+`GET /api/installer` returns CLI Receipts with `activations.cli.path` and
+`needsPath` so a UI can offer PATH setup guidance. Enable/disable plans use
+the Receipt's `componentId` without an `agent`. Disable removes only the
+wrapper; uninstall also removes the out-link and Receipt, leaving shared
+Nix store paths for Nix GC. This backend is not connected to the default
+prototype UI yet.
