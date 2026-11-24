@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createInstaller } from '../backend/installer.mjs';
 import express from 'express';
-import { attachAgent } from '../backend/agent.mjs';
+import { attachApi } from '../backend/api.mjs';
 
 const commit = 'a'.repeat(40);
 const metadata = { full_name: 'example/review', name: 'review', description: 'Review code.', language: 'TypeScript', stargazers_count: 42, topics: ['code-review'], owner: { avatar_url: 'https://avatars.githubusercontent.com/u/42?v=4' } };
@@ -131,7 +131,7 @@ test('HTTP Add persists Detector metadata, deduplicates canonical repos and neve
   t.after(() => rm(directory, { recursive: true, force: true }));
   let offline = false;
   const app = express().use(express.json());
-  const stop = attachAgent(app, { directory, createCodex: () => { throw new Error('AI must not be called'); }, installerOptions: {
+  const stop = attachApi(app, { directory, installerOptions: {
     env: { GITHUB_TOKEN: 'http-test-secret' }, run: async () => ({ stdout: '' }), fetchRemote: async url => {
       if (offline) throw new Error('GitHub became unavailable after search');
       return Response.json(url.includes('/search/') ? { items: [metadata] } : url.includes('/commits/') ? { sha: commit }
@@ -169,7 +169,7 @@ test('saved Cards preserve explicit Kind and GitHub icons and reject unsupported
   const { installer, directory } = await fixture(t);
   const card = { ...await installer.inspect('https://github.com/example/review'), kind: 'desktop-app', iconUrl: 'https://raw.githubusercontent.com/example/review/main/icon.png' };
   const app = express().use(express.json());
-  const stop = attachAgent(app, { directory });
+  const stop = attachApi(app, { directory });
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   t.after(async () => { await stop(); await new Promise(resolve => server.close(resolve)); });
@@ -192,7 +192,7 @@ test('Install reuses saved detection for 24 hours, then refreshes and persists i
   let revision = commit;
   const requests = [];
   const app = express().use(express.json());
-  const stop = attachAgent(app, { directory, installerOptions: {
+  const stop = attachApi(app, { directory, installerOptions: {
     home: directory + '-home', env: {}, now: () => clock, run: async (program, args) => ({
       stdout: program === 'nix' && args[0] === 'eval'
         ? JSON.stringify({ mainProgram: 'review', outputPath: directory + '/nix-output' })

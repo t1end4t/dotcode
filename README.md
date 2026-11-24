@@ -3,16 +3,15 @@
 A local dashboard for finding, installing, and managing GitHub repositories: CLIs, desktop apps, coding-agent skills, and MCP servers.
 
 The UI shows the Library of saved Cards with server-side GitHub search and
-installation controls. The assistant remains a preview.
-
+installation controls. 
 ## What You Can Do
 
-- **Tools:** Browse GitHub projects, save notes, check releases, and manage installations through chat.
-- **Agent setup:** Manage workspace skills, Model Context Protocol (MCP) servers, and instructions for Codex or Claude.
+- **Library:** Search GitHub, save repositories as Cards, and check releases.
+- **Install:** Install skills (files Backend) and CLIs (Nix Backend) from a Card.
 
 ## Get Started
 
-You need **Node.js and npm**. The assistant also needs **Codex installed and configured**; it uses your existing model and provider settings.
+You need **Node.js and npm**.
 
 Run these commands from the repository root:
 
@@ -30,7 +29,7 @@ npm run build
 HOST=127.0.0.1 npm start
 ```
 
-## Use the Assistant
+## Use the Library
 
 In **Library**, open **Add repository**, then use **Search GitHub** to search by keyword or paste an
 `https://github.com/owner/repo` URL. Results show stars, language, description,
@@ -42,40 +41,12 @@ GitHub requests use `GITHUB_TOKEN`, or `gh auth token` when available. Without a
 token, search still works with lower anonymous limits and shows a warning.
 Credentials stay on the server and are sent only to `api.github.com`.
 
-Open the assistant from the header. Drag a tool card into chat to include its GitHub link, or use **Ask AI**.
-
-Dropped tools appear as removable attachment cards. Drop, paste, or use **Attach images** to add PNG, JPEG, or WebP images (up to four per message, 5 MiB each). Images can be sent without text. They are included in that turn only; attach them again if a later message needs them. Image previews remain in the open conversation but are not saved across reloads. The server stages private image files under `DOTCODE_HOME` and removes them after the turn. Your configured Codex model must support image input.
-
-Try requests such as:
-
-```text
-Add magnitudedev/magnitude to my library
-Save this note for Magnitude: Evaluate for browser automation
-Install Magnitude
-Remove the Magnitude card
-```
-
-Use **Organize with AI** to group your library into categories.
-
-### Before Making Changes
-
-- A chat request authorizes the requested changes inside the managed workspace, without a separate approval dialog.
-- Desktop launcher changes require separate approval. Runtime buttons and form submissions authorize their exact actions.
-- Adding or removing a card does not install or uninstall its tool.
-- Installed status requires a verified command or supported disk discovery; it does not guarantee that a tool runs correctly.
-- The assistant is instructed to save `install.sh`, `update.sh`, `uninstall.sh`, and `verify.sh` under the managed workspace's `apps/<id>/`. Later operations reuse these scripts after inspection. Existing apps gain missing scripts during an authorized install or update; scripts are not created retroactively. Nix profile discovery exposes saved script paths, but does not verify their contents or execute them.
-- Nix install/update scripts must register a permanent `apps/<id>/gc-root` after candidate verification and check it with `nix-store --query --roots`. This protects the rooted version and its dependencies from `nix-collect-garbage -d`, including when run with sudo. Existing scripts need repair during an authorized update; this policy is assistant-driven, not a server-enforced guarantee. Uninstall removes the root without collecting shared store paths.
-- Failed or stopped operations can leave partial changes. Inspect them before retrying.
-- “Missing successful verification command” means the receipt did not match a successful command event; it does not prove installation failed. Ask the assistant to inspect the existing installation, run its `verify.sh` as a standalone command, and register it without reinstalling.
-- DotCode supplies the host OS release and inventory to the assistant. It is instructed to batch inspection, resolve commands through `PATH` (including on NixOS), and avoid unrelated app exploration. Lifecycle scripts, artifact verification, and launcher approval still apply; fewer steps are not guaranteed.
-
 ## Your Workspace
 
 DotCode keeps managed data outside this repository, under `~/.dotcode` by default:
 
 ```text
 .dotcode/
-  workspace/       Tool sources and installation artifacts
   catalog.json     Your library, notes, and tags
   inventory.json   Installation records and run logs
 ```
@@ -84,7 +55,6 @@ This directory holds machine-local data, not application source. Keep it out of 
 
 - Set `DOTCODE_HOME` to use another data directory. Existing data is not moved automatically.
 - When migrating an older data directory, retain a symlink at its old location until stored installation paths and service references have been updated.
-- The assistant uses `DOTCODE_HOME/workspace` (`~/.dotcode/workspace` by default). The dashboard has no folder picker; previously saved folder selections are ignored. Agent Setup forms apply to this workspace. GitHub skills installed from Cards activate globally for each agent.
 - Keep one DotCode server running per machine. Logs may contain local paths and command output.
 
 ## Configuration
@@ -103,7 +73,7 @@ Set environment variables when starting the server. See `.env.example` for basic
 
 ## Development
 
-Built with React, TypeScript, Vite, Express, and the Codex SDK. Server code is in `backend/`, the UI in `frontend/src/`.
+Built with React, TypeScript, Vite, and Express. Server code is in `backend/`, the UI in `frontend/src/`.
 
 ### Library UI
 
@@ -126,7 +96,7 @@ browser fixtures cover search recovery, stale responses and Add without writing 
 | `npm run build` | Type-check the frontend and tests, then bundle the frontend. |
 | `npm start` | Serve the production build. |
 
-`backend/server.ts` is the server entry point; `backend/instructions.md` defines the assistant's policy. `frontend/src/` contains the UI. `tests/` contains regression tests.
+`backend/server.ts` is the server entry point and `backend/api.mjs` holds the API routes. `frontend/src/` contains the UI. `tests/` contains regression tests.
 
 Production still needs the server source and dependencies. The build does not type-check the server.
 
@@ -147,7 +117,7 @@ Activations, the Store version and its Receipt, preserving the Card.
 Existing files, real directories, foreign symlinks and symlinked parent
 folders cause a conflict; DotCode leaves them untouched. Skills currently
 support regular files and directories. Repositories without a skill marker
-continue through the assistant's existing installation workflow.
+are not installable yet.
 
 ### Nix CLI backend
 
