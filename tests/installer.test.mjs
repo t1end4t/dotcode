@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, mkdir, readFile, readlink, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -135,6 +136,80 @@ test('occupied install names and symlinked Activation parents are conflicts befo
     await assert.rejects(readdir(directory), { code: 'ENOENT' });
     await assert.rejects(readdir(path.join(home, '.agents')), { code: 'ENOENT' });
   }
+});
+
+test('an Unmanaged item at an Activation path blocks install with a clear message and is left alone', async t => {
+  const { installer, home } = await fixture(t);
+  const foreign = path.join(home, '.claude/skills/review');
+  await mkdir(foreign, { recursive: true });
+  await writeFile(path.join(foreign, 'SKILL.md'), '# Mine');
+  await assert.rejects(installer.plan({ action: 'install', githubUrl, subpath: 'skills/review' }), { code: 'CONFLICT', message: /Unmanaged .*review.* blocks .*yourself/ });
+  assert.equal(await readFile(path.join(foreign, 'SKILL.md'), 'utf8'), '# Mine');
+});
+
+test('Unmanaged scan lists CLIs, skills, subagents, plugins and units without a Receipt, skips Nix, and writes nothing', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dotcode-unmanaged-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const nix = path.join(root, 'nix-store');
+  const bin = path.join(root, 'bin');
+  await mkdir(path.join(nix, 'pkg/bin'), { recursive: true });
+  await mkdir(path.join(nix, 'skill'));
+  await writeFile(path.join(nix, 'pkg/bin/nixtool'), '', { mode: 0o755 });
+  await writeFile(path.join(nix, 'nix.service'), 'ExecStart=/bin/true --port 20128\n');
+  await mkdir(bin);
+  await writeFile(path.join(bin, 'foreign'), '#!/bin/sh\n', { mode: 0o755 });
+  await writeFile(path.join(bin, 'notes.txt'), 'not executable');
+  await symlink(path.join(nix, 'pkg/bin/nixtool'), path.join(bin, 'nixtool'));
+  await symlink(path.join(nix, 'pkg/bin'), path.join(root, 'nix-bin'));
+  const { installer, install, home, directory, calls } = await fixture(t, { nixRoots: [nix], searchPath: [bin, bin, path.join(root, 'nix-bin'), 'relative'].join(':') });
+  await install();
+  const at = (...parts) => path.join(home, ...parts);
+  await mkdir(at('.codex'), { recursive: true });
+  await symlink(at('.agents/skills'), at('.codex/skills'));
+  await rm(at('.claude/skills/review'));
+  await mkdir(at('.claude/skills/review'));
+  await mkdir(at('.claude/skills/mine'), { recursive: true });
+  await symlink(path.join(nix, 'skill'), at('.claude/skills/home-manager'));
+  await mkdir(at('.claude/agents'), { recursive: true });
+  await writeFile(at('.claude/agents/helper.md'), '# Helper');
+  await writeFile(at('.claude/agents/notes.txt'), 'not a subagent');
+  await mkdir(at('.codex/agents'), { recursive: true });
+  await writeFile(at('.codex/agents/helper.toml'), 'name = "helper"');
+  await mkdir(at('.claude/plugins/cache/tool'), { recursive: true });
+  await writeFile(at('.claude/plugins/installed_plugins.json'), JSON.stringify({ version: 2, plugins: {
+    'tool@market': [{ installPath: at('.claude/plugins/cache/tool') }], 'nix@market': [{ installPath: path.join(nix, 'pkg') }],
+  } }));
+  await writeFile(at('.codex/config.toml'), 'model = "x"\n[plugins."lint@market"]\nenabled = true\n[plugins."nix@market"]\nenabled = true\n');
+  await mkdir(at('.codex/plugins/cache/market'), { recursive: true });
+  await symlink(path.join(nix, 'pkg'), at('.codex/plugins/cache/market/nix'));
+  await mkdir(at('.config/systemd/user/default.target.wants'), { recursive: true });
+  await writeFile(at('.config/systemd/user/dotcode-9router.service'), 'ExecStart=/usr/bin/env 9router --host 127.0.0.1 --port 20128\n');
+  await writeFile(at('.config/systemd/user/other-9router.service'), 'Environment=PORT=20128\nExecStart=/bin/router\n');
+  await symlink(path.join(nix, 'nix.service'), at('.config/systemd/user/nix.service'));
+  const listener = createServer();
+  t.after(() => listener.close());
+  await new Promise((resolve, reject) => listener.once('error', reject).listen(0, '127.0.0.1', resolve));
+  const { port } = listener.address();
+  await writeFile(at('.config/systemd/user/listener.service'), `# --port 42\nExecStart=/bin/router --port ${port}\n`);
+  const tree = async folder => Promise.all((await readdir(folder, { recursive: true })).sort().map(async entry => [entry, await readFile(path.join(folder, entry), 'utf8').catch(error => error.code)]));
+  const before = await Promise.all([tree(root), tree(path.dirname(directory))]);
+  const commandCount = calls.length;
+
+  const { items, warnings } = await installer.unmanaged();
+  assert.deepEqual(items.map(item => [item.kind, item.name, item.agent ?? null]), [
+    ['cli', 'foreign', null],
+    ['skill', 'mine', 'claude'], ['skill', 'review', 'claude'],
+    ['subagent', 'helper', 'claude'], ['subagent', 'helper', 'codex'],
+    ['plugin', 'lint@market', 'codex'], ['plugin', 'tool@market', 'claude'],
+    ['service', 'dotcode-9router.service', null], ['service', 'listener.service', null], ['service', 'other-9router.service', null],
+  ]);
+  assert.equal(items[0].path, path.join(bin, 'foreign'));
+  assert.deepEqual(items.filter(item => item.kind === 'service').map(item => item.ports), [[20128], [port], [20128]]);
+  assert.ok(warnings.some(warning => /skill review .*same name as a DotCode Component/.test(warning)));
+  assert.ok(warnings.some(warning => /Port 20128 .*dotcode-9router\.service.*other-9router\.service/.test(warning)));
+  if (process.platform === 'linux') assert.ok(warnings.some(warning => warning.includes(`Port ${port}`) && warning.includes('already listening')));
+  assert.equal(calls.length, commandCount);
+  assert.deepEqual(await Promise.all([tree(root), tree(path.dirname(directory))]), before);
 });
 
 test('execution rechecks ownership after planning, rejects once, and preserves the other Activation', async t => {

@@ -23,7 +23,7 @@ export function mergeInstallerReceipts(items: ManageableItem[], receipts: SkillR
 
 export function installationStatus(item: ManageableItem) {
   if (!item.installed) return 'Not installed';
-  if (!item.installedSkills?.length) return 'Installed';
+  if (!item.installedSkills?.length) return 'Installed · Unmanaged';
   if (item.installedSkills.some(receipt => receipt.status === 'conflict')) return 'Installed · Conflict';
   return item.installedSkills.some(receipt => receipt.status === 'enabled') ? 'Installed · Enabled' : 'Installed · Disabled';
 }
@@ -39,7 +39,7 @@ export async function executeInstallerAction(body: Record<string, unknown>) {
   return post('execute', { planId: plan.id });
 }
 
-export function SkillControls({ item, onChanged, onLegacyInstall }: { item: ManageableItem; onChanged: () => Promise<void>; onLegacyInstall: () => void }) {
+export function SkillControls({ item, onChanged, onUnsupported }: { item: ManageableItem; onChanged: () => Promise<void>; onUnsupported: () => void }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const receipts = item.installedSkills ?? [];
@@ -51,7 +51,7 @@ export function SkillControls({ item, onChanged, onLegacyInstall }: { item: Mana
       await executeInstallerAction(body);
       await onChanged();
     } catch (failure) {
-      if (failure instanceof Error && 'code' in failure && failure.code === 'NOT_SKILL' && !item.detection?.skillPaths.length && body.action === 'install') onLegacyInstall();
+      if (failure instanceof Error && 'code' in failure && failure.code === 'NOT_SKILL' && !item.detection?.skillPaths.length && body.action === 'install') onUnsupported();
       else setError(failure instanceof Error ? failure.message : 'Installer request failed.');
     } finally { setWorking(false); }
   };
@@ -65,12 +65,10 @@ export function SkillControls({ item, onChanged, onLegacyInstall }: { item: Mana
       </button>)}
       <button type="button" disabled={working} className="rt-button" onClick={() => void apply({ action: 'uninstall', componentId: receipt.id })}>Uninstall</button>
       {receipt.error && <p role="alert" className="text-xs text-(--ctp-red)">{receipt.error}</p>}
-    </div>) : <>
-      <button type="button" disabled={working} className={`rt-button ${item.installed ? '' : 'rt-primary'}`}
-        onClick={() => item.installed ? onLegacyInstall() : void apply({ action: 'install', githubUrl: item.githubUrl })}>
-        {working ? 'Working…' : item.installed ? 'Uninstall' : 'Install'}
-      </button>
-    </>}
+    </div>) : item.installed
+      // No Receipt: DotCode never runs old lifecycle scripts, so there is nothing to act on.
+      ? <span className="text-xs" title="Installed without DotCode. Manage it with the tool that installed it.">Unmanaged · display only</span>
+      : <button type="button" disabled={working} className="rt-button rt-primary" onClick={() => void apply({ action: 'install', githubUrl: item.githubUrl })}>{working ? 'Working…' : 'Install'}</button>}
     {error && <p role="alert" className="text-xs text-(--ctp-red)">{error}</p>}
   </div>;
 }

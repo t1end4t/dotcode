@@ -1,7 +1,8 @@
 import { createGithub, referenceBadge } from './github.mjs';
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { cp, lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rename, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +28,7 @@ function source(value) {
   return { githubUrl, subpath, ref };
 }
 
-export function createInstaller({ directory, home = homedir(), run = promisify(execFile), fetchRemote = globalThis.fetch, now = Date.now, searchPath = process.env.PATH ?? '', env = process.env } = {}) {
+export function createInstaller({ directory, home = homedir(), run = promisify(execFile), fetchRemote = globalThis.fetch, now = Date.now, searchPath = process.env.PATH ?? '', env = process.env, nixRoots = ['/nix/store'] } = {}) {
   home = path.resolve(home);
   directory = path.resolve(directory ?? process.env.DOTCODE_HOME ?? path.join(home, '.dotcode'));
   const contains = (root, target) => target === root || target.startsWith(root + path.sep);
@@ -91,12 +92,18 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     } finally { await rm(temporary, { force: true }); }
   }
 
-  async function activations(receipt, kind) {
+  async function activations(receipt, kind, installingReceipts) {
     const result = {};
     for (const agent of kind.activationKeys) {
       const target = receipt.activations[agent].path;
       await checkParents(target);
       const info = await optionalStat(target);
+      if (info && installingReceipts) {
+        if (!installingReceipts.some(item => Object.values(item.activations).some(entry => entry.path === target))) {
+          throw new InstallerError('CONFLICT', `Unmanaged ${receipt.kind} ${receipt.name} at ${target} blocks this install. Resolve the conflict yourself first; DotCode will not change it.`);
+        }
+        conflict(target);
+      }
       if (info && !await kind.ownsActivation(receipt, target, info)) conflict(target);
       result[agent] = { path: target, enabled: Boolean(info) };
     }
@@ -114,6 +121,101 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
         return { ...receipt, ...kind.snapshotFields?.(receipt), activations: current, status: kind.activationKeys.some(agent => current[agent].enabled) ? 'enabled' : 'disabled' };
       } catch (error) { return { ...receipt, activations: Object.fromEntries(kind.activationKeys.map(agent => [agent, { path: receipt.activations[agent].path, enabled: false }])), status: 'conflict', error: error.message }; }
     })) };
+  }
+
+  // Read-only: Unmanaged items are shown, never adopted, changed or removed.
+  async function unmanaged(installations = []) {
+    const { receipts } = await state();
+    const owned = new Set();
+    const items = [];
+    const warnings = [];
+    const entries = async folder => (await readdir(folder).catch(() => [])).filter(name => !name.startsWith('.')).map(name => path.join(folder, name));
+    const resolved = target => realpath(target).catch(() => null);
+    const fromNix = target => target && nixRoots.some(root => contains(root, target));
+    const canonicalPath = async target => {
+      const parent = await resolved(path.dirname(target));
+      return parent && path.join(parent, path.basename(target));
+    };
+    for (const receipt of receipts) {
+      const kind = kinds.get(receipt.kind);
+      for (const agent of kind.activationKeys) {
+        const target = receipt.activations[agent].path;
+        try {
+          const info = await optionalStat(target);
+          if (info && await kind.ownsActivation(receipt, target, info)) owned.add(await canonicalPath(target));
+        } catch {}
+      }
+    }
+    const found = async target => {
+      const real = await resolved(target);
+      if (!real || fromNix(real) || owned.has(await canonicalPath(target))) return null;
+      return stat(real).catch(() => null);
+    };
+    const readConfig = async target => {
+      const handle = await open(target, constants.O_RDONLY | constants.O_NONBLOCK).catch(() => null);
+      if (!handle) return '';
+      try { return (await handle.stat()).isFile() ? await handle.readFile('utf8') : ''; }
+      finally { await handle.close(); }
+    };
+    for (const bin of new Set(searchPath.split(path.delimiter).filter(entry => path.isAbsolute(entry)).map(entry => path.resolve(entry)))) {
+      if (await found(bin)) for (const target of await entries(bin)) {
+        const info = await found(target);
+        if (info?.isFile() && info.mode & 0o111) items.push({ kind: 'cli', name: path.basename(target), path: target });
+      }
+    }
+    for (const [agent, folder] of [['codex', '.agents/skills'], ['codex', '.codex/skills'], ['claude', '.claude/skills']]) {
+      for (const target of await entries(path.join(home, folder))) if ((await found(target))?.isDirectory()) items.push({ kind: 'skill', name: path.basename(target), agent, path: target });
+    }
+    for (const [agent, folder, extension] of [['claude', '.claude/agents', '.md'], ['codex', '.codex/agents', '.toml']]) {
+      for (const target of await entries(path.join(home, folder))) if (target.endsWith(extension) && (await found(target))?.isFile()) items.push({ kind: 'subagent', name: path.basename(target, extension), agent, path: target });
+    }
+    const claudePlugins = path.join(home, '.claude/plugins/installed_plugins.json');
+    try {
+      const config = await readConfig(claudePlugins);
+      for (const [name, registrations] of Object.entries(JSON.parse(config || '{}').plugins ?? {})) {
+        for (const entry of Array.isArray(registrations) ? registrations : [registrations]) {
+          const target = entry?.installPath;
+          if (typeof target === 'string' && path.isAbsolute(target) && !fromNix(target) && !fromNix(await resolved(target))) {
+            items.push({ kind: 'plugin', name, agent: 'claude', path: target });
+          }
+        }
+      }
+    } catch { warnings.push(`Could not read ${claudePlugins}.`); }
+    const codexConfig = path.join(home, '.codex/config.toml');
+    // ponytail: only `[plugins."name@market"]` tables; parse TOML fully when other forms are needed.
+    for (const [, name, plugin, market] of (await readConfig(codexConfig)).matchAll(/^\s*\[plugins\."(([\w.-]+)@([\w.-]+))"\]/gm)) {
+      if ([plugin, market].some(part => ['.', '..'].includes(part))) continue;
+      const cache = path.join(home, '.codex/plugins/cache', market, plugin);
+      if (!fromNix(await resolved(cache))) items.push({ kind: 'plugin', name, agent: 'codex', path: codexConfig });
+    }
+    for (const target of await entries(path.join(home, '.config/systemd/user'))) {
+      if (!/\.(?:service|socket|timer|target|path|mount|automount|slice|scope|swap|device)$/.test(target) || !(await found(target))?.isFile()) continue;
+      // ponytail: ports from direct declarations, not environment files, drop-ins or arbitrary command arguments.
+      const unit = (await readConfig(target)).split(/\r?\n/).filter(line => /^\s*(?:ExecStart|Environment|ListenStream)\s*=/.test(line)).join('\n');
+      const ports = [...new Set([...unit.matchAll(/(?:--port[= \t]+|\bPORT=|^\s*ListenStream\s*=\s*(?:[^\s]+:)?)["']?(\d{1,5})\b/gm)].map(match => Number(match[1])).filter(port => port > 0 && port <= 65535))];
+      items.push({ kind: 'service', name: path.basename(target), path: target, ports });
+    }
+    const managedRepos = new Set(receipts.map(receipt => receipt.recipe.source.githubUrl));
+    for (const item of installations) {
+      if (!item?.installed || typeof item.name !== 'string' || typeof item.githubUrl !== 'string') continue;
+      const url = item.githubUrl.replace(/\/$/, '').replace(/\.git$/i, '').toLowerCase();
+      const target = typeof item.location === 'string' ? item.location : '';
+      if (!managedRepos.has(url)) items.push({ kind: 'app', name: item.name, path: target });
+    }
+    const order = ['cli', 'skill', 'subagent', 'plugin', 'service', 'app'];
+    items.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || a.name.localeCompare(b.name) || (a.agent ?? '').localeCompare(b.agent ?? '') || a.path.localeCompare(b.path));
+    for (const item of items) if (receipts.some(receipt => receipt.kind === item.kind && receipt.name === item.name)) warnings.push(`Unmanaged ${item.kind} ${item.name} at ${item.path} has the same name as a DotCode Component.`);
+    const ports = Map.groupBy(items.flatMap(item => (item.ports ?? []).map(port => [port, item.name])), ([port]) => port);
+    if (ports.size) {
+      const tables = await Promise.all(['/proc/net/tcp', '/proc/net/tcp6'].map(file => readFile(file, 'utf8').catch(() => '')));
+      const listening = new Set(tables.flatMap(table => [...table.matchAll(/^\s*\d+:\s+[\dA-F]+:([\dA-F]{4})\s+\S+\s+0A\b/gmi)].map(match => parseInt(match[1], 16))));
+      for (const [port, users] of ports) {
+        const names = users.map(([, name]) => name).join(', ');
+        if (users.length > 1) warnings.push(`Port ${port} is declared by ${names}.`);
+        if (listening.has(port)) warnings.push(`Port ${port} is already listening. Check whether ${names} can use it.`);
+      }
+    }
+    return { items, warnings };
   }
 
   const freshDetection = detection => detection && !detection.error && now() - Date.parse(detection.checkedAt) >= 0 && now() - Date.parse(detection.checkedAt) <= 24 * 60 * 60 * 1000;
@@ -136,9 +238,8 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       }
       if (!receipt || (body.action !== 'uninstall' && !activationKey)) throw new InstallerError('INVALID_INPUT', 'Choose an installed Component and agent.');
     }
-    const current = await activations(receipt, kind);
+    const current = await activations(receipt, kind, body.action === 'install' ? saved.receipts : undefined);
     await checkStore(receipt, kind, body.action === 'install');
-    if (body.action === 'install' && kind.activationKeys.some(agent => current[agent].enabled)) conflict(receipt.storePath);
     const approved = { id: randomUUID(), action: body.action, componentId: receipt.id, version: receipt.version, expiresAt: now() + 15 * 60 * 1000 };
     for (const [key, pendingPlan] of pending) if (pendingPlan.public.expiresAt < now()) pending.delete(key);
     pending.set(approved.id, { public: approved, receipt, activationKey, raw: saved.raw, current });
@@ -178,7 +279,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     try {
       const saved = await state();
       if (saved.raw !== approved.raw) throw new InstallerError('CONFLICT', 'Receipts changed. Create a new plan.');
-      const current = await activations(receipt, kind);
+      const current = await activations(receipt, kind, approved.public.action === 'install' ? saved.receipts : undefined);
       if (JSON.stringify(current) !== JSON.stringify(approved.current)) throw new InstallerError('CONFLICT', 'Activations changed. Create a new plan.');
       if (approved.public.action !== 'install') {
         await checkStore(receipt, kind);
@@ -220,7 +321,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       await checkStore(receipt, kind, true);
       await kind.installStore(receipt);
       installed = true;
-      await activations(receipt, kind);
+      await activations(receipt, kind, saved.receipts);
       for (const agent of kind.activationKeys) {
         const target = receipt.activations[agent].path;
         await createActivation(receipt, kind, target);
@@ -435,7 +536,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
   };
 
   const kinds = new Map([['skill', skill], ['cli', cli]]);
-  return { snapshot, plan, execute, search: github.search, inspect: github.inspect, info: github.info, detect,
+  return { snapshot, plan, execute, unmanaged, search: github.search, inspect: github.inspect, info: github.info, detect,
     refreshDetection: async card => {
       if (freshDetection(card.detection)) return card;
       const { detection, latestReleaseAt } = await github.detect(card.githubUrl);

@@ -181,6 +181,13 @@ input::placeholder, textarea::placeholder { color: #818181; }
 .skill-controls input { width: 100%; border: 1px solid #ffffff30; border-radius: 8px; padding: 8px; background: #1a1a1a; color: #eee; }
 .skill-controls [role=alert], .library-error { color: #f0b6ac; }
 .library-error { margin-bottom: 20px; }
+.unmanaged-inventory { margin-top: 26px; padding-top: 18px; border-top: 1px solid #ffffff15; color: #aaa; font-size: 13px; overflow-wrap: anywhere; }
+.unmanaged-inventory h2 { margin: 0; color: #ddd; font-size: 16px; }
+.unmanaged-inventory p { margin: 5px 0 10px; }
+.unmanaged-inventory summary { width: fit-content; padding: 6px 0; color: #ddd; cursor: pointer; }
+.unmanaged-inventory ul { padding-left: 20px; }
+.unmanaged-inventory li + li { margin-top: 6px; }
+.unmanaged-warnings, .status.unmanaged { color: #e8ca8c; }
 .discovery-result-body > .discovery-detection-error { color: #f0b6ac; font-size: 12px; }
 .discovery-message { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 260px; padding: 30px 24px; text-align: center; color: #a4a4a4; }
 .discovery-message h3 { color: #ddd; font-size: 17px; font-weight: 500; }

@@ -5,11 +5,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import express from 'express';
-import { createInstaller } from './installer.mjs';
+import { createInstaller, InstallerError } from './installer.mjs';
 import { githubRepo } from './github.mjs';
 import { attachMcp, mcpToken } from './mcp.mjs';
 
-const textFields = ['name', 'githubUrl', 'action', 'location', 'method', 'configurationNotes', 'version', 'installCommand', 'updateCommand', 'uninstallCommand', 'verificationCommand'];
+const textFields = ['name', 'githubUrl', 'action', 'location', 'method', 'configurationNotes', 'version'];
 const catalogFields = ['id', 'name', 'repo', 'githubUrl', 'category', 'categoryLabel', 'description', 'primaryLanguage', 'defaultInstallCommand', 'customNotes', 'customCommand'];
 const catalogKey = url => url.replace(/\/$/, '').replace(/\.git$/, '').toLowerCase();
 function validateCatalog(items) {
@@ -55,7 +55,8 @@ async function discoverInstallations(directory, installations) {
   try { catalog = validateCatalog(JSON.parse(await readFile(path.join(directory, 'catalog.json'), 'utf8'))); }
   catch { return installations; }
   const observed = new Map(installations.map(item => [item.githubUrl.toLowerCase().replace(/\/$/, ''), item]));
-  const workspace = await realpath(path.join(directory, 'workspace'));
+  const workspace = await realpath(path.join(directory, 'workspace')).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+  if (!workspace || workspace === directory || !contains(directory, workspace)) return installations;
   for (const item of catalog) {
     if (!/^[\w-]+$/.test(item.id)) continue;
     const location = path.join(workspace, 'apps', item.id, 'profile');
@@ -94,17 +95,12 @@ async function discoverInstallations(directory, installations) {
       if (owned) observed.set(key, { ...previous, installed: false });
       continue;
     }
-    const lifecycle = {};
-    for (const name of ['install', 'update', 'uninstall', 'verify']) {
-      const script = path.join(path.dirname(location), `${name}.sh`);
-      if ((await lstat(script).catch(() => null))?.isFile()) lifecycle[name === 'verify' ? 'verificationCommand' : `${name}Command`] = `bash '${script.replaceAll("'", "'\\''")}'`;
-    }
     observed.set(key, {
-      ...Object.fromEntries(textFields.map(field => [field, ''])), ...previous, ...lifecycle,
+      ...Object.fromEntries(textFields.map(field => [field, ''])), ...previous,
       name: item.name, githubUrl: item.githubUrl.replace(/\/$/, ''), installed: true,
       location, method: 'Nix profile (disk discovery)',
       version: path.basename(root).match(/^[^-]+-.+-(\d[^/]*)$/)?.[1] ?? '',
-      configurationNotes: `Active profile manifest and executable checked on disk. Not a runtime health check. Lifecycle record: ${path.join(path.dirname(location), 'README.md')}`,
+      configurationNotes: `Active profile manifest and executable checked on disk. Not a runtime health check. Unmanaged: no Receipt, display only.`,
       verifiedAt: new Date().toISOString(),
     });
   }
@@ -155,8 +151,8 @@ export function attachApi(app, {
     checkDirectory(await realpath(workspace));
   };
   const load = async () => {
-    await prepare();
     try {
+      checkDirectory(await realpath(directory));
       const state = JSON.parse(await readFile(statePath, 'utf8'));
       if (!state || !Array.isArray(state.installations) || !Array.isArray(state.runs)) throw new Error('Invalid inventory file. Restore it before continuing.');
       return { ...state, categories: state.categories ?? [] };
@@ -164,6 +160,16 @@ export function attachApi(app, {
       if (error.code === 'ENOENT') return { installations: [], runs: [], categories: [] };
       throw error;
     }
+  };
+  const loadInstallations = async () => {
+    const state = await load();
+    // Old lifecycle scripts are never offered: installs without a Receipt are display-only.
+    const installations = (await discoverInstallations(directory, state.installations)).map(({ installCommand, updateCommand, uninstallCommand, verificationCommand, ...item }) => item);
+    return { ...state, installations };
+  };
+  const unmanaged = async () => {
+    const { installations } = await loadInstallations();
+    return installer.unmanaged(installations);
   };
   const save = async (state, file = statePath) => {
     await prepare();
@@ -201,6 +207,9 @@ export function attachApi(app, {
     { name: 'list_components', description: 'List installed Components from their Receipts with current Activation status.',
       inputSchema: { type: 'object', properties: {} },
       call: whenIdle(() => installer.snapshot()) },
+    { name: 'list_unmanaged', description: 'List Unmanaged CLIs, skills, subagents, plugins, user units and older apps with name and port conflict warnings. Display only.',
+      inputSchema: { type: 'object', properties: {} },
+      call: whenIdle(() => unmanaged()) },
   ] });
   app.use('/api', (req, res, next) => {
     if (!isLocalRequest(req)) return res.status(403).json({ error: 'Local, same-origin requests only.' });
@@ -233,6 +242,10 @@ export function attachApi(app, {
     try { res.json(await installer.snapshot()); }
     catch (error) { installerFailure(res, error); }
   });
+  app.get('/api/installer/unmanaged', async (_req, res) => {
+    try { res.json(await unmanaged()); }
+    catch (error) { installerFailure(res, error); }
+  });
   app.post('/api/installer/detect', async (req, res) => {
     busy = true;
     try { res.json(await installer.detect(req.body)); }
@@ -248,6 +261,9 @@ export function attachApi(app, {
         const cards = await loadCatalog() ?? [];
         const card = cards.find(card => typeof req.body.githubUrl === 'string' && catalogKey(card.githubUrl) === catalogKey(req.body.githubUrl));
         if (!card) throw new Error('Choose a Card from the Library.');
+        const { installations } = await loadInstallations();
+        const existing = installations.find(item => item.installed && catalogKey(item.githubUrl) === catalogKey(card.githubUrl));
+        if (existing) throw new InstallerError('CONFLICT', `Unmanaged ${card.name} blocks this install. Resolve the existing installation yourself first; DotCode will not change it.`);
         if (card.detection) {
           const refreshed = await installer.refreshDetection(card);
           if (refreshed !== card) await save(validateCatalog(cards.map(entry => entry === card ? refreshed : entry)), catalogPath);
@@ -270,10 +286,7 @@ export function attachApi(app, {
   });
 
   app.get('/api/inventory', async (_req, res) => {
-    try {
-      const state = await load();
-      res.json({ ...state, installations: await discoverInstallations(directory, state.installations) });
-    }
+    try { res.json(await loadInstallations()); }
     catch (error) { res.status(500).json({ error: error.message }); }
   });
 

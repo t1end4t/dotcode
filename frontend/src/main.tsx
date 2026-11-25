@@ -11,7 +11,7 @@ import type { ManageableItem } from "./data/items";
 
 type Card = {
   name: string; repo: string; kind?: ManageableItem["kind"]; referenceBadge?: "Hook" | "Library";
-  description: string; backend: string; version: string; state: "available" | "enabled" | "disabled";
+  description: string; backend: string; version: string; state: "available" | "enabled" | "disabled" | "unmanaged";
   avatar?: string; language?: string;
   source?: ManageableItem;
 };
@@ -85,7 +85,7 @@ const initialCards: Card[] = [
     "language": "Rust"
   }
 ];
-const stateLabels = { available: "Not installed", enabled: "Installed · Enabled", disabled: "Installed · Disabled" };
+const stateLabels = { available: "Not installed", enabled: "Installed · Enabled", disabled: "Installed · Disabled", unmanaged: "Installed · Unmanaged" };
 const kindLabels = { cli: "CLI", "desktop-app": "Desktop app", skill: "Skill", mcp: "MCP" };
 const icons = { cli: Terminal, "desktop-app": Monitor, skill: BookOpen, mcp: MessageSquare };
 const actionLabels = { install: "Install", enable: "Enable", disable: "Disable", uninstall: "Uninstall" };
@@ -105,7 +105,7 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
     const kind = receipts.length ? "skill" : item.kind ?? (badges.includes("Skill") ? "skill" : badges.includes("MCP") ? "mcp" : badges.includes("AppImage") ? "desktop-app" : badges.some(badge => ["npm CLI", "Nix flake"].includes(badge)) ? "cli" : undefined);
     return { name: item.name, repo: item.repo, description: item.description, kind: referenceBadge ? undefined : kind, referenceBadge, language: item.primaryLanguage, avatar: item.iconUrl ?? `https://github.com/${encodeURIComponent(item.repo.split('/')[0])}.png?size=80`,
       backend: receipts[0]?.recipe.backend ?? (item.receipt ? /nix/i.test(item.receipt.method) ? "nix" : /npm/i.test(item.receipt.method) ? "npm" : item.receipt.method : "—"), version: item.currentVersion ?? "—",
-      state: !item.installed ? "available" : receipts.length && receipts.every(receipt => receipt.status === "disabled") ? "disabled" : "enabled", source: item };
+      state: !item.installed ? "available" : !receipts.length ? "unmanaged" : receipts.every(receipt => receipt.status === "disabled") ? "disabled" : "enabled", source: item };
   }).sort((a, b) => (a.kind ?? "").localeCompare(b.kind ?? "") || a.name.localeCompare(b.name)) : demoCards;
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
@@ -159,7 +159,7 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
     setMessages(previous => [...previous, { role: "user", text: `${context ? `[${context.name}] ` : ""}${draft.trim()}` },
       { role: "assistant", text: "This prototype is not connected to an AI provider." +
         (!context ? " Use “Ask assistant” on a repository to try contextual actions." :
-          context.referenceBadge ? "" : ` Try the action below to update ${context.name} in the Library.`) }]);
+          context.referenceBadge ? "" : context.state === "unmanaged" ? " This installation is display-only because it has no Receipt." : ` Try the action below to update ${context.name} in the Library.`) }]);
     setDraft("");
   };
   const editRepoQuery = (value: string) => {
@@ -241,14 +241,28 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
           <p className="card-description">{card.description}</p>
           {card.source && <div className="card-meta discovery-meta"><span><Star size={12} />{(card.source.stars ?? 0).toLocaleString("en-US")} stars</span><span>{card.language}</span>{card.source.latestReleaseAt && <span>Latest release: <time dateTime={card.source.latestReleaseAt}>{card.source.latestReleaseAt.slice(0, 10)}</time></span>}</div>}
           <div className="card-installation"><span className={`status ${card.state}`}><span className="status-dot" />{card.referenceBadge ? "Not installable" : stateLabels[card.state]}</span><span className="version">{card.state !== "available" ? <><code>{card.version}</code><span>{card.backend}</span></> : card.language || "Details unavailable"}</span></div>
-          <footer className="card-actions"><button className="text-button ask-ai" onClick={() => askAbout(card)} aria-label={`Ask assistant about ${card.name}`}><MessageSquare size={14} />Ask assistant</button>{!card.referenceBadge && <div>{card.source && catalog ? <SkillControls item={card.source} onChanged={catalog.refreshCatalog} onLegacyInstall={() => setAnnouncement("This Library currently installs skills only. Other repository installation options are not connected yet.")} /> : card.state === "available" ? <button className="button install-button" disabled={card.backend === "—"} title={card.backend === "—" ? "Installation details are unavailable in this prototype" : undefined} aria-label={`Install ${card.name}`} onClick={() => act(card, "install")}><Download size={14} />Install</button> : <><button className="text-button uninstall-button" aria-label={`Uninstall ${card.name}`} onClick={event => requestUninstall(card, event.currentTarget)}>Uninstall</button><button className="enable-switch" role="switch" aria-checked={card.state === "enabled"} aria-label={`Enable ${card.name}`} onClick={() => act(card, card.state === "enabled" ? "disable" : "enable")}><span className="sr-only">{card.state === "enabled" ? "Enabled" : "Disabled"}</span><span className="switch-track"><span /></span></button></>}</div>}</footer>
+          <footer className="card-actions"><button className="text-button ask-ai" onClick={() => askAbout(card)} aria-label={`Ask assistant about ${card.name}`}><MessageSquare size={14} />Ask assistant</button>{!card.referenceBadge && <div>{card.source && catalog ? <SkillControls item={card.source} onChanged={catalog.refreshCatalog} onUnsupported={() => setAnnouncement("This Library currently installs skills only. Other repository installation options are not connected yet.")} /> : card.state === "available" ? <button className="button install-button" disabled={card.backend === "—"} title={card.backend === "—" ? "Installation details are unavailable in this prototype" : undefined} aria-label={`Install ${card.name}`} onClick={() => act(card, "install")}><Download size={14} />Install</button> : <><button className="text-button uninstall-button" aria-label={`Uninstall ${card.name}`} onClick={event => requestUninstall(card, event.currentTarget)}>Uninstall</button><button className="enable-switch" role="switch" aria-checked={card.state === "enabled"} aria-label={`Enable ${card.name}`} onClick={() => act(card, card.state === "enabled" ? "disable" : "enable")}><span className="sr-only">{card.state === "enabled" ? "Enabled" : "Disabled"}</span><span className="switch-track"><span /></span></button></>}</div>}</footer>
         </article>; })}</div> : <div className="empty"><Search size={24} /><h2>{cards.length ? "No matching repositories" : "Your Library is empty"}</h2><p>{cards.length ? "Try another search or clear your filters." : "Use Add repository to search GitHub and save your first Card."}</p>{cards.length > 0 && <button className="button" onClick={() => { setQuery(""); setKind("all"); setStatus("all"); }}>Clear filters</button>}</div>}
+        {catalog && <section className="unmanaged-inventory" aria-labelledby="unmanaged-heading">
+          <h2 id="unmanaged-heading">Unmanaged</h2>
+          <p>Found on this machine, not managed by DotCode. Display only.</p>
+          {!catalog.unmanaged ? <p role="status">Scanning…</p> : "error" in catalog.unmanaged ? <p role="alert" className="library-error">Unmanaged scan unavailable: {catalog.unmanaged.error}</p> : <>
+            {catalog.unmanaged.warnings.length > 0 && <ul className="unmanaged-warnings" aria-label="Conflict warnings">{catalog.unmanaged.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>}
+            {catalog.unmanaged.items.length ? <details>
+              <summary>{catalog.unmanaged.items.length} detected</summary>
+              <ul aria-label="Detected items">{catalog.unmanaged.items.map(item => <li key={JSON.stringify([item.kind, item.agent, item.name, item.path])}>
+                <strong>{item.name}</strong> · {item.kind === "cli" ? "CLI" : item.kind}{item.agent && ` · ${item.agent}`}{!!item.ports?.length && ` · Port ${item.ports.join(", ")}`}
+                <br /><code>{item.path}</code>
+              </li>)}</ul>
+            </details> : <p>No Unmanaged items found.</p>}
+          </>}
+        </section>}
         <footer className="library-footer"><span><Github size={13} />Repository descriptions from GitHub About.</span><span>{catalog ? "Cards saved to Library · assistant preview" : "Demo installations · reload to reset"}</span></footer>
       </main>
       <aside id="assistant" className="assistant" aria-label="Assistant" hidden={!chatOpen} onKeyDown={event => { if (event.key === "Escape") closeChat(); }}>
         <header className="assistant-header"><div><MessageSquare size={16} /><h2>Assistant</h2><span className="demo-label">Demo</span></div><button className="icon-button" onClick={closeChat} aria-label="Close assistant"><PanelRightClose size={17} /></button></header>
         <div className="chat-messages" role="log" aria-label="Conversation"><div className="chat-intro"><h3>{context ? context.name : "Ask about a repository"}</h3><p>{context ? context.description : "Use Ask assistant on a card to bring a repository into this conversation."}</p><div className="assistant-mode">Preview only. AI is not connected.</div><button className="chat-suggestion" onClick={() => { setContextRepo("ggml-org/llama.cpp"); setDraft("Help me install llama.cpp on this machine"); chatInput.current?.focus(); }}><span>Install llama.cpp</span><ArrowRight size={14} /></button><button className="chat-suggestion" onClick={() => { setDraft("Review the tools I have installed"); chatInput.current?.focus(); }}><span>Review installed tools</span><ArrowRight size={14} /></button></div>{messages.map((message, index) => <div key={index} className={`chat-message ${message.role}`}><span>{message.role === "user" ? "You" : "Assistant · demo"}</span><p>{message.text}</p></div>)}<div ref={chatEnd} /></div>
-        {context && <div className="chat-context"><div><Github size={14} /><strong>{context.name}</strong><button className="icon-button" aria-label="Remove repository context" onClick={() => setContextRepo(null)}><X size={13} /></button></div><span>{context.repo}</span><div className="context-actions">{!context.referenceBadge && (context.state === "available" ? ["install"] as const : [context.state === "enabled" ? "disable" : "enable"] as const).map(action => <button key={action} className="button" disabled={context.backend === "—"} onClick={() => { const result = act(context, action); setMessages(previous => [...previous, { role: "assistant", text: `${result} Simulated action; your machine is unchanged.` }]); }}>{actionLabels[action]} {context.name}</button>)}<span className={`status ${context.state}`}><span className="status-dot" />{context.referenceBadge ? "Not installable" : stateLabels[context.state]}</span></div></div>}
+        {context && <div className="chat-context"><div><Github size={14} /><strong>{context.name}</strong><button className="icon-button" aria-label="Remove repository context" onClick={() => setContextRepo(null)}><X size={13} /></button></div><span>{context.repo}</span><div className="context-actions">{!context.referenceBadge && context.state !== "unmanaged" && (context.state === "available" ? ["install"] as const : [context.state === "enabled" ? "disable" : "enable"] as const).map(action => <button key={action} className="button" disabled={context.backend === "—"} onClick={() => { const result = act(context, action); setMessages(previous => [...previous, { role: "assistant", text: `${result} Simulated action; your machine is unchanged.` }]); }}>{actionLabels[action]} {context.name}</button>)}<span className={`status ${context.state}`}><span className="status-dot" />{context.referenceBadge ? "Not installable" : stateLabels[context.state]}</span></div></div>}
         <form className="chat-composer" onSubmit={submitChat}><label className="sr-only" htmlFor="chat-input">Message assistant</label><textarea ref={chatInput} id="chat-input" value={draft} onChange={event => setDraft(event.target.value)} placeholder="Ask about your tools…" rows={3} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><div><span>Enter to send · Shift + Enter for a new line</span><button className="send-button" type="submit" disabled={!draft.trim()} aria-label="Send message"><ArrowRight size={16} /></button></div></form>
       </aside>
     </div>

@@ -119,3 +119,30 @@ test('update checks fetch only cataloged GitHub repositories', async () => {
   }
 });
 
+
+test('inventory shows old installs without a Receipt as display-only and never exposes lifecycle scripts', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-legacy-'));
+  const app = express();
+  attachApi(app, { directory, installerOptions: { home: directory + '-home', searchPath: '' } });
+  const server = app.listen(0, '127.0.0.1');
+  t.after(async () => {
+    await new Promise(resolve => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
+  });
+  await new Promise(resolve => server.once('listening', resolve));
+  const legacy = { name: 'Tool', githubUrl: url, installed: true, version: '1.0', verificationCommand: 'bash verify.sh', uninstallCommand: 'bash uninstall.sh', installCommand: 'x', updateCommand: 'y' };
+  await writeFile(path.join(directory, 'inventory.json'), JSON.stringify({ installations: [legacy], runs: [] }));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { installations } = await (await fetch(`${base}/api/inventory`)).json();
+  assert.deepEqual(installations, [{ name: 'Tool', githubUrl: url, installed: true, version: '1.0' }]);
+  const scan = await fetch(`${base}/api/installer/unmanaged`);
+  assert.equal(scan.status, 200);
+  assert.deepEqual((await scan.json()).items, [{ kind: 'app', name: 'Tool', path: '' }]);
+  const item = { id: 'tool', name: 'Tool', repo: 'example/tool', githubUrl: url, category: 'CLI', categoryLabel: 'CLI', description: '', tags: [], primaryLanguage: '', defaultInstallCommand: '', customNotes: '', customCommand: '' };
+  const headers = { 'content-type': 'application/json' };
+  assert.equal((await fetch(`${base}/api/catalog`, { method: 'PUT', headers, body: JSON.stringify({ items: [item] }) })).status, 200);
+  const plan = await fetch(`${base}/api/installer/plan`, { method: 'POST', headers, body: JSON.stringify({ action: 'install', githubUrl: url }) });
+  assert.equal(plan.status, 409);
+  assert.match((await plan.json()).error, /Unmanaged Tool blocks this install/);
+  assert.equal(JSON.parse(await readFile(path.join(directory, 'inventory.json'), 'utf8')).installations[0].uninstallCommand, 'bash uninstall.sh', 'the stored record is left alone');
+});
