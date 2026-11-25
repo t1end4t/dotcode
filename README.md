@@ -49,6 +49,7 @@ DotCode keeps managed data outside this repository, under `~/.dotcode` by defaul
 .dotcode/
   catalog.json     Your library, notes, and tags
   inventory.json   Installation records and run logs
+  mcp-token        Bearer token for /mcp (owner read/write only)
 ```
 
 This directory holds machine-local data, not application source. Keep it out of Git.
@@ -72,6 +73,44 @@ Set environment variables when starting the server. See `.env.example` for basic
 **Keep DotCode local.** Do not expose it as an unauthenticated public service, including through a reverse proxy. DotCode listens only on loopback by default. Changing `HOST` changes the listener address; API writes still require a loopback connection, a local `Host`, and a same-origin `Origin` header if sent.
 
 The loopback check uses the immediate socket peer. A reverse proxy that connects to DotCode over loopback is inside that trust boundary: DotCode sees the proxy as the peer even when the original client is remote.
+
+## Ask an agent over MCP
+
+DotCode serves a read-only MCP endpoint at `http://127.0.0.1:3000/mcp`
+(Streamable HTTP, JSON responses). Tools:
+
+| Tool | Returns |
+| --- | --- |
+| `search` | GitHub search results with Detector badges, like Search in the UI. |
+| `repo_info` | Repository metadata, README, and the Library Card if one exists. |
+| `detect` | Ranked candidate Recipes from the Detector. |
+| `list_components` | Installed Components from Receipts, with Activation status. |
+
+No tool adds Cards, writes Receipts, or installs anything. `search` and `detect`
+may evaluate a repository's flake, which can fetch its source into the Nix store.
+
+Each request needs a loopback connection, a local `Host`, no foreign `Origin`,
+and `Authorization: Bearer <token>`. DotCode creates the token on first start in
+`DOTCODE_HOME/mcp-token` with mode `0600`. To rotate it, delete the file and
+restart DotCode.
+
+Connect Codex CLI (`~/.dotcode` is the default `DOTCODE_HOME`):
+
+```sh
+codex mcp add dotcode --url http://127.0.0.1:3000/mcp --bearer-token-env-var DOTCODE_MCP_TOKEN
+export DOTCODE_MCP_TOKEN="$(cat ~/.dotcode/mcp-token)"   # in the shell that starts codex
+```
+
+Connect Claude Code:
+
+```sh
+claude mcp add --transport http dotcode http://127.0.0.1:3000/mcp \
+  --header 'Authorization: Bearer ${DOTCODE_MCP_TOKEN}'
+export DOTCODE_MCP_TOKEN="$(cat ~/.dotcode/mcp-token)"   # in the shell that starts claude
+```
+
+The single quotes keep `${DOTCODE_MCP_TOKEN}` unexpanded, so Claude's config stores
+the reference and reads the token from the environment at startup.
 
 ## Development
 

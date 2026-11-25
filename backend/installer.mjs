@@ -435,7 +435,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
   };
 
   const kinds = new Map([['skill', skill], ['cli', cli]]);
-  return { snapshot, plan, execute, search: github.search, inspect: github.inspect, detect,
+  return { snapshot, plan, execute, search: github.search, inspect: github.inspect, info: github.info, detect,
     refreshDetection: async card => {
       if (freshDetection(card.detection)) return card;
       const { detection, latestReleaseAt } = await github.detect(card.githubUrl);

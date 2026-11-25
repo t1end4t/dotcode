@@ -7,6 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import express from 'express';
 import { createInstaller } from './installer.mjs';
 import { githubRepo } from './github.mjs';
+import { attachMcp, mcpToken } from './mcp.mjs';
 
 const textFields = ['name', 'githubUrl', 'action', 'location', 'method', 'configurationNotes', 'version', 'installCommand', 'updateCommand', 'uninstallCommand', 'verificationCommand'];
 const catalogFields = ['id', 'name', 'repo', 'githubUrl', 'category', 'categoryLabel', 'description', 'primaryLanguage', 'defaultInstallCommand', 'customNotes', 'customCommand'];
@@ -170,6 +171,37 @@ export function attachApi(app, {
     await writeFile(temporary, JSON.stringify(state, null, 2), { mode: 0o600 });
     await rename(temporary, file);
   };
+  const token = prepare().then(() => mcpToken(path.join(directory, 'mcp-token')));
+  token.catch(error => console.error(`DotCode MCP disabled: ${error.message}`));
+  const githubUrlSchema = { type: 'string', description: 'GitHub repository URL, e.g. https://github.com/owner/repo' };
+  const whenIdle = call => args => {
+    if (busy || initializingCatalog) throw new Error('Another task is running. Wait for it to finish.');
+    return call(args);
+  };
+  // Holds the busy lock like POST /api/installer/detect so UI tasks and other MCP calls wait.
+  const exclusive = call => whenIdle(async args => {
+    busy = true;
+    try { return await call(args); }
+    finally { busy = false; }
+  });
+  attachMcp(app, { isLocal: isLocalRequest, token, tools: [
+    { name: 'search', description: 'Search GitHub repositories (or inspect one URL / owner/repo) with Detector badges, like DotCode Search.',
+      inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+      call: ({ query }) => installer.search(query) },
+    { name: 'repo_info', description: 'Read GitHub metadata and README for a repository, plus its Library Card if the user added one.',
+      inputSchema: { type: 'object', properties: { githubUrl: githubUrlSchema }, required: ['githubUrl'] },
+      call: async ({ githubUrl }) => {
+        const info = await installer.info(githubUrl);
+        const card = (await loadCatalog() ?? []).find(card => catalogKey(card.githubUrl) === catalogKey(githubUrl)) ?? null;
+        return { ...info, card };
+      } },
+    { name: 'detect', description: 'Run the Detector on a repository and return ranked candidate Recipes. Does not install anything.',
+      inputSchema: { type: 'object', properties: { githubUrl: githubUrlSchema, ref: { type: 'string' } }, required: ['githubUrl'] },
+      call: exclusive(({ githubUrl, ref }) => installer.detect({ githubUrl, ref })) },
+    { name: 'list_components', description: 'List installed Components from their Receipts with current Activation status.',
+      inputSchema: { type: 'object', properties: {} },
+      call: whenIdle(() => installer.snapshot()) },
+  ] });
   app.use('/api', (req, res, next) => {
     if (!isLocalRequest(req)) return res.status(403).json({ error: 'Local, same-origin requests only.' });
     if (req.method !== 'GET' && !req.is('application/json')) return res.status(415).json({ error: 'JSON required.' });
