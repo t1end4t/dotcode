@@ -1,12 +1,12 @@
 # Mọi Component đều theo mô hình Store → Activation → Receipt
 
-Mọi Kind (`cli`, `desktop-app`, `skill`, `mcp`) đều dùng chung một mô hình, học từ skills-manager (xem `docs/research/skills-manager.md`):
+Mọi Kind (`cli`, `desktop-app`, `skill`, `mcp`, `plugin`, `subagent`, `service`) đều dùng chung một mô hình, học từ skills-manager (xem `docs/research/skills-manager.md`):
 
 - Bản cài nằm trong Store, mỗi phiên bản ở một chỗ riêng.
 - dotcode tạo Activation để đưa bản cài ra chỗ dùng.
 - Receipt ghi lại cả hai.
 
-Nhờ vậy, mọi thao tác trên Component đều làm bằng code cố định, không cần AI và không phụ thuộc vào việc Component được cài bằng Backend nào:
+Installer thực thi các thao tác trên Component bằng code cố định. AI chọn cách cài và đề xuất Plan (ADR 0003), nhưng không tự thực thi:
 
 | Thao tác | Cách làm |
 |---|---|
@@ -23,4 +23,4 @@ Không có trạng thái "trial" riêng: cài chính là thử. Vì vậy uninst
 - **CLI dùng wrapper thay vì symlink.** Wrapper thêm các Requirement vào PATH rồi gọi thẳng binary trong Store. Binary bị link động trên NixOS thì chạy qua `nix-alien`.
 - **Uninstall không xoá dữ liệu và config của app.** Chỉ xoá khi user tích chọn trên danh sách đường dẫn cụ thể.
 - **Khi update skill,** file nào có ở bản cũ mà bản mới không có thì phải liệt kê cho user duyệt trước khi thay.
-- **`service` chưa thuộc mô hình này trong v1.** Service vẫn dùng luồng Runtime như hiện tại.
+- **`service` cũng theo mô hình này** (ADR 0004): Activation là một unit `systemd --user`. Luồng Runtime cũ đã bị xoá.

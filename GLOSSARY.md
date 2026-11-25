@@ -1,6 +1,6 @@
 # DotCode
 
-Dashboard chạy trên máy local, dùng để tìm, cài và quản lý các repo GitHub: CLI, desktop app, skill và MCP server cho coding agent.
+Dashboard chạy trên máy local, dùng để tìm, cài và quản lý các repo GitHub: CLI, desktop app, skill, plugin, subagent, MCP server cho coding agent, cùng service và Model của LLM local. Phần nền của máy do Nix quản lý, không thuộc dotcode.
 
 ## Thư viện
 
@@ -23,18 +23,14 @@ Một phần cài được của repo mà Card trỏ tới, có đúng một Kin
 _Avoid_: part, module, package
 
 **Kind**:
-Loại của một Component: `cli`, `desktop-app`, `skill` hoặc `mcp`.
+Loại của một Component: `cli`, `desktop-app`, `skill`, `mcp`, `plugin`, `subagent` hoặc `service`. Hook và library không phải Kind: dotcode chỉ nhận ra chúng, không cài.
 _Avoid_: type, category (category dùng để sắp xếp Card)
 
 ## Cài đặt
 
 **Recipe**:
-Mô tả bằng dữ liệu cách cài một Component: dùng Backend nào, lấy từ nguồn nào, theo dõi bản mới ra sao. Recipe không phải là script.
+Mô tả bằng dữ liệu cách lấy, chuẩn bị và đưa một Component vào sử dụng, gồm nguồn, Requirement và thông tin cần để tạo Activation.
 _Avoid_: install plan, install script
-
-**Backend**:
-Cách cài mà dotcode biết thực thi, mỗi Backend chạy được một loại Recipe: `files`, `nix`, `mise`, `appimage`, `script`.
-_Avoid_: installer, method, provider
 
 **Detector**:
 Phần của dotcode đọc một repo và thông tin về máy, rồi đưa ra các Recipe ứng viên đã được xếp hạng.
@@ -49,13 +45,27 @@ Nơi chứa các bản cài, mỗi phiên bản của một Component nằm ở 
 _Avoid_: install dir, library (Library là tập Card)
 
 **Activation**:
-Những thứ dotcode đặt ra ngoài Store để một bản cài dùng được: wrapper trên PATH, launcher, link skill, entry trong config MCP. Component **enabled** nghĩa là đang có Activation.
+Những thứ dotcode đặt ra ngoài Store để một bản cài dùng được: wrapper trên PATH, launcher, link skill hoặc subagent, entry trong config MCP, plugin đã đăng ký với agent, unit systemd của service. Component **enabled** nghĩa là đang có Activation.
 _Avoid_: deployment, link (link chỉ là một dạng Activation)
 
 **Receipt**:
 Bản ghi của dotcode về một Component đã cài: Recipe đã dùng, đúng phiên bản đã cài, vị trí trong Store, và các Activation đã tạo. Receipt ghi lại quá khứ, nó không chứng minh rằng thứ đang có trên đĩa là của dotcode.
 _Avoid_: install record, inventory entry
 
+**Plan**:
+Một thao tác thay đổi đã được dotcode chuẩn bị. Plan do AI đề xuất phải được user duyệt; AI không duyệt được Plan.
+_Avoid_: proposal, pending action
+
 **Pin**:
 Khoá Recipe vào một phiên bản cụ thể để dotcode không update Component đó.
 _Avoid_: lock, freeze
+
+## Máy
+
+**Model**:
+Một file weights của LLM local, cùng các file đi kèm như `mmproj`. Model được đăng ký tại chỗ, không nằm trong Store, và không phải Card.
+_Avoid_: weights, checkpoint
+
+**Unmanaged**:
+Một thứ có trên máy, cùng loại với Component, nhưng không do dotcode cài nên không có Receipt. dotcode chỉ hiển thị nó.
+_Avoid_: external, foreign, legacy
