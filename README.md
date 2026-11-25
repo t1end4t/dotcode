@@ -11,7 +11,7 @@ installation controls.
 
 ## Get Started
 
-You need **Node.js and npm**.
+You need **Node.js 24 and npm**.
 
 Run these commands from the repository root:
 
@@ -40,6 +40,19 @@ again keeps the existing Card. Install refreshes detection older than 24 hours.
 GitHub requests use `GITHUB_TOKEN`, or `gh auth token` when available. Without a
 token, search still works with lower anonymous limits and shows a warning.
 Credentials stay on the server and are sent only to `api.github.com`.
+
+### Ask the Assistant
+
+Select **Ask assistant** on a Card, or open **Assistant** and include a GitHub
+repository name or URL in your question. The integrated Codex SDK reads repository
+metadata and READMEs through DotCode's read-only MCP tools. It cannot run shell
+commands, edit files, or install Components.
+
+Sign in with `codex login`, or set `OPENAI_API_KEY` in the server environment.
+DotCode uses the bundled Codex binary and your login credentials, but ignores
+personal Codex configuration, hooks, plugins, and MCP servers. Chat history stays
+in the open page; each request sends recent turns to Codex, and reloading clears
+it.
 
 ## Your Workspace
 
@@ -124,9 +137,9 @@ and `npm run build` bundles it for `npm start`. The entry and styles are
 
 With the app open in an Orca browser tab, run
 `node tests/check-ui.mjs <browserPageId>` for the UI interaction check.
-For the app's Search/Add flow, run
-`node tests/check-github-ui.mjs <browserPageId>` against a local app tab. Its
-browser fixtures cover search recovery, stale responses and Add without writing Cards.
+For Search/Add and Assistant, run `node tests/check-github-ui.mjs <browserPageId>`
+against a local app tab. Browser fixtures cover Search/Add and chat replies,
+sign-in errors, and connection errors without writing Cards or calling Codex.
 
 | Command | Purpose |
 | --- | --- |

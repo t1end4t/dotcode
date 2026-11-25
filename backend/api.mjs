@@ -8,6 +8,7 @@ import express from 'express';
 import { createInstaller } from './installer.mjs';
 import { githubRepo } from './github.mjs';
 import { attachMcp, mcpToken } from './mcp.mjs';
+import { answerChat } from './chat.mjs';
 
 const textFields = ['name', 'githubUrl', 'action', 'location', 'method', 'configurationNotes', 'version', 'installCommand', 'updateCommand', 'uninstallCommand', 'verificationCommand'];
 const catalogFields = ['id', 'name', 'repo', 'githubUrl', 'category', 'categoryLabel', 'description', 'primaryLanguage', 'defaultInstallCommand', 'customNotes', 'customCommand'];
@@ -125,6 +126,7 @@ export function attachApi(app, {
   directory = process.env.DOTCODE_HOME || path.join(homedir(), '.dotcode'),
   fetchRelease = globalThis.fetch,
   installerOptions = {},
+  createCodex = undefined,
 } = {}) {
   directory = path.resolve(directory);
   const appDirectory = fileURLToPath(new URL('..', import.meta.url));
@@ -207,7 +209,43 @@ export function attachApi(app, {
     if (req.method !== 'GET' && !req.is('application/json')) return res.status(415).json({ error: 'JSON required.' });
     next();
   });
-  app.use('/api/ai/chat', express.json({ limit: '28mb' }));
+  let chatRunning = false;
+  app.post('/api/ai/chat', express.json({ limit: '128kb' }), async (req, res) => {
+    res.setHeader('cache-control', 'no-store');
+    const { message, githubUrl, history = [] } = req.body ?? {};
+    if (typeof message !== 'string' || !message.trim() || message.length > 4000 || !Array.isArray(history) || history.length > 8 ||
+        history.some(entry => !['user', 'assistant'].includes(entry?.role) || typeof entry.text !== 'string' || entry.text.length > 4000)) {
+      return res.status(400).json({ error: 'Enter a message of up to 4,000 characters.' });
+    }
+    let repo;
+    if (githubUrl != null) {
+      try { repo = `https://github.com/${githubRepo(githubUrl)}`; }
+      catch (error) { return res.status(400).json({ error: error.message }); }
+    }
+    if (chatRunning) return res.status(409).json({ error: 'The Assistant is answering another question. Try again shortly.' });
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(120000)]);
+    res.once('close', () => controller.abort());
+    chatRunning = true;
+    try {
+      // Use the actual listener, never a client-supplied URL or forwarded Host.
+      const host = req.socket.localFamily === 'IPv6' ? '[::1]' : '127.0.0.1';
+      // Opt in by name so future mutating MCP tools are not exposed to this chat.
+      const reply = await answerChat({ message: message.trim(), githubUrl: repo, history: history.map(({ role, text }) => ({ role, text })),
+        mcpUrl: `http://${host}:${req.socket.localPort}/mcp`, token: await token,
+        tools: ['search', 'repo_info', 'detect', 'list_components'], signal, createCodex });
+      if (!res.destroyed) res.json({ reply });
+    } catch (error) {
+      // SDK errors can contain raw provider responses, URLs or credentials.
+      const auth = /\b(?:401|unauthorized|authentication|not logged in|api key)\b/i.test(error.message);
+      if (!res.destroyed) res.status(signal.aborted ? 504 : 502).json({ error: signal.aborted
+        ? 'Codex took too long to answer. Try again.' : auth
+          ? 'Codex sign-in failed. Run codex login, or check OPENAI_API_KEY.'
+          : 'Could not reach Codex or DotCode MCP. Check the connection and try again.' });
+    } finally { chatRunning = false; }
+  });
+  app.use('/api/ai/chat', (error, _req, res, _next) => res.status(error.type === 'entity.too.large' ? 413 : 400)
+    .json({ error: error.type === 'entity.too.large' ? 'Chat request is too large.' : 'Invalid chat request.' }));
   app.use('/api', express.json({ limit: '512kb' }));
   const installerFailure = (res, error) => res.status(['CONFLICT', 'BUSY'].includes(error.code) ? 409 : 400).json({ error: error.message, code: error.code });
   // ponytail: keep only the latest search batch; superseded refreshes require a new Search.

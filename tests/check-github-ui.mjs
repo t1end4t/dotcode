@@ -27,6 +27,7 @@ evaluate(`
   window.__searchCalls = [];
   window.__savedCards = [];
   window.__installRequests = [];
+  window.__chatRequests = [];
   window.__slowSearch = null;
   window.__catalogReads = 0;
   window.__refreshAttempts = 0;
@@ -44,7 +45,12 @@ evaluate(`
   const updated = { ...references[1], detection: { ...references[1].detection, commit: 'b'.repeat(40), badges: ['npm CLI'] } };
   window.fetch = async (input, options) => {
     const url = new URL(String(input), location.href);
-    if (url.pathname.startsWith('/api/ai/')) throw new Error('AI must not be called');
+    if (url.pathname === '/api/ai/chat') {
+      window.__chatRequests.push(JSON.parse(options.body));
+      if (window.__chatRequests.length === 1) return Response.json({ reply: 'The README describes a code review library.' });
+      if (window.__chatRequests.length === 2) return Response.json({ error: 'Codex sign-in failed. Run codex login.' }, { status: 502 });
+      throw new TypeError('Network error');
+    }
     if (url.pathname === '/api/installer/search') {
       window.__searchCalls.push(url.searchParams.get('q'));
       const q = url.searchParams.get('q');
@@ -146,6 +152,24 @@ try {
     evaluate(`document.querySelector('${selector} .ask-ai').click(); return true;`);
     assert.equal(evaluate('return document.querySelector(".chat-context .context-actions").textContent;'), 'Not installable');
   }
+  const sendChat = value => evaluate(`
+    const node = document.querySelector('#chat-input');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(node, ${JSON.stringify(value)});
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    node.form.requestSubmit(); return true;
+  `);
+  sendChat('What does this repository do?');
+  command('wait', '--text', 'The README describes a code review library.');
+  assert.deepEqual(evaluate('return window.__chatRequests[0];'), {
+    message: 'What does this repository do?', githubUrl: 'https://github.com/example/review-library', history: [],
+  });
+  sendChat('How do I use it?');
+  command('wait', '--text', 'Codex sign-in failed.');
+  assert.equal(evaluate('return document.querySelector("#chat-input").value;'), 'How do I use it?');
+  click('[aria-label="Send message"]');
+  command('wait', '--text', 'Could not reach DotCode.');
+  assert.equal(evaluate('return window.__chatRequests[2].history.length;'), 2);
   click('[aria-label="Close assistant"]');
   const legacyCard = cardSelector('review-legacy');
   command('wait', '--selector', `${legacyCard} .status.enabled`);

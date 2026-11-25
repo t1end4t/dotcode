@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowRight, ArrowUpRight, BookOpen, Check, ChevronDown, Download, Github, Library, MessageSquare, Monitor, PanelRightClose, PanelRightOpen, Plus, Search, Star, Loader2, Terminal, X, Zap } from "lucide-react";
 import "./index.css";
-import { useCatalog } from "./useCatalog";
+import { readApiJson, useCatalog } from "./useCatalog";
 import { SkillControls } from "./installer";
 import { GitHubSearch } from "./components/GitHubSearch";
 import type { ManageableItem } from "./data/items";
@@ -114,6 +114,8 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
   const [contextRepo, setContextRepo] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [chatPending, setChatPending] = useState(false);
+  const [chatError, setChatError] = useState("");
   const [announcement, setAnnouncement] = useState("");
   const [uninstallRepo, setUninstallRepo] = useState<string | null>(null);
   const [repoInput, setRepoInput] = useState("");
@@ -138,7 +140,7 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
     && `${card.name} ${card.repo} ${card.description}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
 
   useEffect(() => { if (chatOpen) chatInput.current?.focus(); }, [chatOpen]);
-  useEffect(() => { chatEnd.current?.scrollIntoView({ block: "nearest" }); }, [messages]);
+  useEffect(() => { if (chatOpen) chatEnd.current?.scrollIntoView({ block: "nearest" }); }, [chatOpen, messages, chatPending, chatError]);
   useEffect(() => () => searchRequest.current?.abort(), []);
   useEffect(() => { if (uninstallRepo) uninstallDialog.current?.showModal(); }, [uninstallRepo]);
 
@@ -153,14 +155,33 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
   const closeChat = () => { setChatOpen(false); chatToggle.current?.focus(); };
   const requestUninstall = (card: Card, trigger: HTMLButtonElement) => { uninstallTrigger.current = trigger; setUninstallRepo(card.repo); };
   const closeUninstall = () => { uninstallDialog.current?.close(); setUninstallRepo(null); if (uninstallTrigger.current?.isConnected) uninstallTrigger.current.focus(); else chatToggle.current?.focus(); };
-  const submitChat = (event: React.FormEvent) => {
+  const submitChat = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!draft.trim()) return;
-    setMessages(previous => [...previous, { role: "user", text: `${context ? `[${context.name}] ` : ""}${draft.trim()}` },
-      { role: "assistant", text: "This prototype is not connected to an AI provider." +
-        (!context ? " Use “Ask assistant” on a repository to try contextual actions." :
-          context.referenceBadge ? "" : ` Try the action below to update ${context.name} in the Library.`) }]);
-    setDraft("");
+    const message = draft.trim();
+    if (!message || chatPending) return;
+    const user: Message = { role: "user", text: `${context ? `[${context.repo}] ` : ""}${message}` };
+    if (!catalog) {
+      setMessages(previous => [...previous, user, { role: "assistant", text: "This prototype is not connected to an AI provider." }]);
+      setDraft("");
+      return;
+    }
+    setChatError("");
+    setChatPending(true);
+    setMessages(previous => [...previous, user]);
+    try {
+      const response = await fetch("/api/ai/chat", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message, githubUrl: context?.source?.githubUrl,
+          history: messages.slice(-8).map(({ role, text }) => ({ role, text: text.slice(0, 4000) })) }),
+      });
+      const { reply } = await readApiJson(response);
+      if (typeof reply !== "string" || !reply.trim()) throw new Error("Codex returned an empty answer. Try again.");
+      setMessages(previous => [...previous, { role: "assistant", text: reply }]);
+      setDraft("");
+    } catch (error) {
+      setMessages(previous => previous.slice(0, -1));
+      setChatError(error instanceof Error && !(error instanceof TypeError) ? error.message : "Could not reach DotCode. Check the connection and try again.");
+    } finally { setChatPending(false); }
   };
   const editRepoQuery = (value: string) => {
     searchRequest.current?.abort();
@@ -241,15 +262,15 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
           <p className="card-description">{card.description}</p>
           {card.source && <div className="card-meta discovery-meta"><span><Star size={12} />{(card.source.stars ?? 0).toLocaleString("en-US")} stars</span><span>{card.language}</span>{card.source.latestReleaseAt && <span>Latest release: <time dateTime={card.source.latestReleaseAt}>{card.source.latestReleaseAt.slice(0, 10)}</time></span>}</div>}
           <div className="card-installation"><span className={`status ${card.state}`}><span className="status-dot" />{card.referenceBadge ? "Not installable" : stateLabels[card.state]}</span><span className="version">{card.state !== "available" ? <><code>{card.version}</code><span>{card.backend}</span></> : card.language || "Details unavailable"}</span></div>
-          <footer className="card-actions"><button className="text-button ask-ai" onClick={() => askAbout(card)} aria-label={`Ask assistant about ${card.name}`}><MessageSquare size={14} />Ask assistant</button>{!card.referenceBadge && <div>{card.source && catalog ? <SkillControls item={card.source} onChanged={catalog.refreshCatalog} onLegacyInstall={() => setAnnouncement("This Library currently installs skills only. Other repository installation options are not connected yet.")} /> : card.state === "available" ? <button className="button install-button" disabled={card.backend === "—"} title={card.backend === "—" ? "Installation details are unavailable in this prototype" : undefined} aria-label={`Install ${card.name}`} onClick={() => act(card, "install")}><Download size={14} />Install</button> : <><button className="text-button uninstall-button" aria-label={`Uninstall ${card.name}`} onClick={event => requestUninstall(card, event.currentTarget)}>Uninstall</button><button className="enable-switch" role="switch" aria-checked={card.state === "enabled"} aria-label={`Enable ${card.name}`} onClick={() => act(card, card.state === "enabled" ? "disable" : "enable")}><span className="sr-only">{card.state === "enabled" ? "Enabled" : "Disabled"}</span><span className="switch-track"><span /></span></button></>}</div>}</footer>
+          <footer className="card-actions"><button className="text-button ask-ai" disabled={chatPending} onClick={() => askAbout(card)} aria-label={`Ask assistant about ${card.name}`}><MessageSquare size={14} />Ask assistant</button>{!card.referenceBadge && <div>{card.source && catalog ? <SkillControls item={card.source} onChanged={catalog.refreshCatalog} onLegacyInstall={() => setAnnouncement("This Library currently installs skills only. Other repository installation options are not connected yet.")} /> : card.state === "available" ? <button className="button install-button" disabled={card.backend === "—"} title={card.backend === "—" ? "Installation details are unavailable in this prototype" : undefined} aria-label={`Install ${card.name}`} onClick={() => act(card, "install")}><Download size={14} />Install</button> : <><button className="text-button uninstall-button" aria-label={`Uninstall ${card.name}`} onClick={event => requestUninstall(card, event.currentTarget)}>Uninstall</button><button className="enable-switch" role="switch" aria-checked={card.state === "enabled"} aria-label={`Enable ${card.name}`} onClick={() => act(card, card.state === "enabled" ? "disable" : "enable")}><span className="sr-only">{card.state === "enabled" ? "Enabled" : "Disabled"}</span><span className="switch-track"><span /></span></button></>}</div>}</footer>
         </article>; })}</div> : <div className="empty"><Search size={24} /><h2>{cards.length ? "No matching repositories" : "Your Library is empty"}</h2><p>{cards.length ? "Try another search or clear your filters." : "Use Add repository to search GitHub and save your first Card."}</p>{cards.length > 0 && <button className="button" onClick={() => { setQuery(""); setKind("all"); setStatus("all"); }}>Clear filters</button>}</div>}
-        <footer className="library-footer"><span><Github size={13} />Repository descriptions from GitHub About.</span><span>{catalog ? "Cards saved to Library · assistant preview" : "Demo installations · reload to reset"}</span></footer>
+        <footer className="library-footer"><span><Github size={13} />Repository descriptions from GitHub About.</span><span>{catalog ? "Cards saved to Library · read-only assistant" : "Demo installations · reload to reset"}</span></footer>
       </main>
       <aside id="assistant" className="assistant" aria-label="Assistant" hidden={!chatOpen} onKeyDown={event => { if (event.key === "Escape") closeChat(); }}>
-        <header className="assistant-header"><div><MessageSquare size={16} /><h2>Assistant</h2><span className="demo-label">Demo</span></div><button className="icon-button" onClick={closeChat} aria-label="Close assistant"><PanelRightClose size={17} /></button></header>
-        <div className="chat-messages" role="log" aria-label="Conversation"><div className="chat-intro"><h3>{context ? context.name : "Ask about a repository"}</h3><p>{context ? context.description : "Use Ask assistant on a card to bring a repository into this conversation."}</p><div className="assistant-mode">Preview only. AI is not connected.</div><button className="chat-suggestion" onClick={() => { setContextRepo("ggml-org/llama.cpp"); setDraft("Help me install llama.cpp on this machine"); chatInput.current?.focus(); }}><span>Install llama.cpp</span><ArrowRight size={14} /></button><button className="chat-suggestion" onClick={() => { setDraft("Review the tools I have installed"); chatInput.current?.focus(); }}><span>Review installed tools</span><ArrowRight size={14} /></button></div>{messages.map((message, index) => <div key={index} className={`chat-message ${message.role}`}><span>{message.role === "user" ? "You" : "Assistant · demo"}</span><p>{message.text}</p></div>)}<div ref={chatEnd} /></div>
-        {context && <div className="chat-context"><div><Github size={14} /><strong>{context.name}</strong><button className="icon-button" aria-label="Remove repository context" onClick={() => setContextRepo(null)}><X size={13} /></button></div><span>{context.repo}</span><div className="context-actions">{!context.referenceBadge && (context.state === "available" ? ["install"] as const : [context.state === "enabled" ? "disable" : "enable"] as const).map(action => <button key={action} className="button" disabled={context.backend === "—"} onClick={() => { const result = act(context, action); setMessages(previous => [...previous, { role: "assistant", text: `${result} Simulated action; your machine is unchanged.` }]); }}>{actionLabels[action]} {context.name}</button>)}<span className={`status ${context.state}`}><span className="status-dot" />{context.referenceBadge ? "Not installable" : stateLabels[context.state]}</span></div></div>}
-        <form className="chat-composer" onSubmit={submitChat}><label className="sr-only" htmlFor="chat-input">Message assistant</label><textarea ref={chatInput} id="chat-input" value={draft} onChange={event => setDraft(event.target.value)} placeholder="Ask about your tools…" rows={3} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><div><span>Enter to send · Shift + Enter for a new line</span><button className="send-button" type="submit" disabled={!draft.trim()} aria-label="Send message"><ArrowRight size={16} /></button></div></form>
+        <header className="assistant-header"><div><MessageSquare size={16} /><h2>Assistant</h2><span className="demo-label">{catalog ? "Read-only" : "Demo"}</span></div><button className="icon-button" onClick={closeChat} aria-label="Close assistant"><PanelRightClose size={17} /></button></header>
+        <div className="chat-messages" role="log" aria-label="Conversation"><div className="chat-intro"><h3>{context ? context.name : "Ask about a repository"}</h3><p>{context ? context.description : "Select Ask assistant on a Card or include a GitHub repository in your question."}</p><div className="assistant-mode">{catalog ? "Powered by Codex. The Assistant can look up repositories but cannot install or change anything." : "Preview only. AI is not connected."}</div>{!catalog && <button className="chat-suggestion" onClick={() => { setContextRepo("ggml-org/llama.cpp"); setDraft("Help me install llama.cpp on this machine"); chatInput.current?.focus(); }}><span>Install llama.cpp</span><ArrowRight size={14} /></button>}<button className="chat-suggestion" disabled={chatPending} onClick={() => { setDraft("Review the tools I have installed"); chatInput.current?.focus(); }}><span>Review installed tools</span><ArrowRight size={14} /></button></div>{messages.map((message, index) => <div key={index} className={`chat-message ${message.role}`}><span>{message.role === "user" ? "You" : catalog ? "Assistant" : "Assistant · demo"}</span><p>{message.text}</p></div>)}{chatPending && <p className="chat-message" role="status">Waiting for Codex…</p>}{chatError && <p className="chat-message chat-error" role="alert">{chatError}</p>}<div ref={chatEnd} /></div>
+        {context && <div className="chat-context"><div><Github size={14} /><strong>{context.name}</strong><button className="icon-button" aria-label="Remove repository context" disabled={chatPending} onClick={() => setContextRepo(null)}><X size={13} /></button></div><span>{context.repo}</span><div className="context-actions">{!catalog && !context.referenceBadge && (context.state === "available" ? ["install"] as const : [context.state === "enabled" ? "disable" : "enable"] as const).map(action => <button key={action} className="button" disabled={context.backend === "—"} onClick={() => { const result = act(context, action); setMessages(previous => [...previous, { role: "assistant", text: `${result} Simulated action; your machine is unchanged.` }]); }}>{actionLabels[action]} {context.name}</button>)}<span className={`status ${context.state}`}><span className="status-dot" />{context.referenceBadge ? "Not installable" : stateLabels[context.state]}</span></div></div>}
+        <form className="chat-composer" onSubmit={submitChat}><label className="sr-only" htmlFor="chat-input">Message assistant</label><textarea ref={chatInput} id="chat-input" value={draft} onChange={event => setDraft(event.target.value)} placeholder="Ask about your tools…" rows={3} maxLength={4000} readOnly={chatPending} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><div><span>Enter to send · Shift + Enter for a new line</span><button className="send-button" type="submit" disabled={!draft.trim() || chatPending} aria-label="Send message"><ArrowRight size={16} /></button></div></form>
       </aside>
     </div>
     <div className="action-announcement" role="status">{announcement && <><Check size={15} />{announcement}<button className="icon-button" onClick={() => setAnnouncement("")} aria-label="Dismiss notification"><X size={14} /></button></>}</div>

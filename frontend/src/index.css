@@ -114,6 +114,7 @@ input::placeholder, textarea::placeholder { color: #818181; }
 .chat-message > span { font-size: 12px; font-weight: 600; color: #ddd; }
 .chat-message p { margin-top: 5px; font-size: 14px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-message.user { padding: 12px; border-radius: 12px; background: #282828; }
+.chat-error { color: #f0b6ac; }
 .chat-context { margin: 12px 16px 0; padding: 10px 12px; border: 1px solid #3d3d3d; border-radius: 10px; background: #222;  border-color: #ffffff14; }
 .chat-context > div:first-child { display: flex; align-items: center; gap: 7px; }
 .chat-context strong { font-size: 13px; font-weight: 500; }
