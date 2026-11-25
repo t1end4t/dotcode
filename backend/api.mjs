@@ -178,6 +178,12 @@ export function attachApi(app, {
     if (busy || initializingCatalog) throw new Error('Another task is running. Wait for it to finish.');
     return call(args);
   };
+  // Holds the busy lock like POST /api/installer/detect so UI tasks and other MCP calls wait.
+  const exclusive = call => whenIdle(async args => {
+    busy = true;
+    try { return await call(args); }
+    finally { busy = false; }
+  });
   attachMcp(app, { isLocal: isLocalRequest, token, tools: [
     { name: 'search', description: 'Search GitHub repositories (or inspect one URL / owner/repo) with Detector badges, like DotCode Search.',
       inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
@@ -191,7 +197,7 @@ export function attachApi(app, {
       } },
     { name: 'detect', description: 'Run the Detector on a repository and return ranked candidate Recipes. Does not install anything.',
       inputSchema: { type: 'object', properties: { githubUrl: githubUrlSchema, ref: { type: 'string' } }, required: ['githubUrl'] },
-      call: whenIdle(({ githubUrl, ref }) => installer.detect({ githubUrl, ref })) },
+      call: exclusive(({ githubUrl, ref }) => installer.detect({ githubUrl, ref })) },
     { name: 'list_components', description: 'List installed Components from their Receipts with current Activation status.',
       inputSchema: { type: 'object', properties: {} },
       call: whenIdle(() => installer.snapshot()) },

@@ -24,7 +24,7 @@ export function attachMcp(app, { isLocal, token, tools }) {
     if (!isLocal(req)) return res.status(403).json(fail(null, -32000, 'Local, same-origin requests only.'));
     let expected;
     try { expected = await token; }
-    catch (error) { return res.status(500).json(fail(null, -32603, `MCP token unavailable: ${error.message}`)); }
+    catch { return res.status(500).json(fail(null, -32603, 'MCP token unavailable. See the DotCode server log.')); }
     const provided = /^Bearer ([^\s]+)$/i.exec(req.headers.authorization ?? '')?.[1];
     if (!provided || !timingSafeEqual(digest(provided), digest(expected))) {
       return res.status(401).set('www-authenticate', 'Bearer').json(fail(null, -32001, 'A valid bearer token is required.'));

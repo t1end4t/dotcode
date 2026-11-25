@@ -9,9 +9,10 @@ import { attachApi } from '../backend/api.mjs';
 
 const commit = 'a'.repeat(40);
 let stall = null;
+let stalled = () => {};
 const fetchRemote = async url => {
   const { pathname } = new URL(url);
-  if (pathname.startsWith('/repos/slow/tool/')) await stall;
+  if (pathname.startsWith('/repos/slow/tool/')) { stalled(); await stall; }
   if (pathname === '/search/repositories') return Response.json({ items: [{ full_name: 'example/tool', description: 'A tool', topics: ['mcp'] }] });
   if (pathname === '/repos/example/tool') return Response.json({ full_name: 'example/tool', description: 'A tool', topics: ['mcp'] });
   if (pathname === '/repos/example/tool/readme') return Response.json({ content: Buffer.from('# Tool\nRead me.').toString('base64') });
@@ -33,6 +34,13 @@ async function serve(t, host = '127.0.0.1', files = {}) {
   await new Promise(resolve => server.once('listening', resolve));
   return { directory, server, port: server.address().port };
 }
+// Hold slow/tool lookups until release(); `reached` resolves once a lookup is waiting.
+const holdSlow = () => {
+  let release;
+  stall = new Promise(resolve => { release = resolve; });
+  const reached = new Promise(resolve => { stalled = resolve; });
+  return { reached, release: () => { release(); stall = null; stalled = () => {}; } };
+};
 const tokenOf = async directory => (await readFile(path.join(directory, 'mcp-token'), 'utf8')).trim();
 const card = (owner, repo) => ({ id: `${owner}--${repo}`, name: repo, repo: `${owner}/${repo}`, githubUrl: `https://github.com/${owner}/${repo}`,
   category: 'Other', categoryLabel: 'Other', description: '', primaryLanguage: 'Unknown', defaultInstallCommand: '', customNotes: '', customCommand: '', tags: [] });
@@ -97,10 +105,9 @@ test('MCP answers read-only questions only with the owner-only bearer token', as
   await unchanged();
   assert.deepEqual((await readdir(directory)).sort(), ['catalog.json', 'mcp-token', 'receipts.json', 'workspace'], 'MCP must not write the Library or Receipts');
 
-  let release;
-  stall = new Promise(resolve => { release = resolve; });
+  const hold = holdSlow();
   const pending = post(`http://127.0.0.1:${port}/api/installer/detect`, {}, { githubUrl: 'https://github.com/slow/tool' });
-  await new Promise(resolve => setTimeout(resolve, 50));
+  await hold.reached;
   try {
     for (const name of ['detect', 'list_components']) {
       const result = await call(5, 'tools/call', { name, arguments: { githubUrl: 'https://github.com/example/tool' } });
@@ -108,11 +115,26 @@ test('MCP answers read-only questions only with the owner-only bearer token', as
       assert.match(result.content[0].text, /Another task is running/);
     }
   } finally {
-    release();
-    stall = null;
+    hold.release();
     await pending;
   }
   assert.deepEqual(await tool('list_components', {}), { receipts: [] });
+
+  const mcpHold = holdSlow();
+  const mcpDetect = call(6, 'tools/call', { name: 'detect', arguments: { githubUrl: 'https://github.com/slow/tool' } });
+  await mcpHold.reached;
+  try {
+    const second = await call(7, 'tools/call', { name: 'detect', arguments: { githubUrl: 'https://github.com/example/tool' } });
+    assert.ok(second.isError, 'MCP detect runs one at a time');
+    assert.match(second.content[0].text, /Another task is running/);
+    const rest = await post(`http://127.0.0.1:${port}/api/installer/detect`, {}, { githubUrl: 'https://github.com/example/tool' });
+    assert.equal(rest.status, 409, 'UI installer waits for MCP detect');
+    assert.equal(rest.body.code, 'BUSY');
+  } finally {
+    mcpHold.release();
+    await mcpDetect;
+  }
+  assert.deepEqual(await tool('list_components', {}), { receipts: [] }, 'MCP detect releases the busy lock');
 
   for (const headers of [{ host: 'example.test' }, { origin: 'https://example.test' }, { origin: `http://127.0.0.1:${port}`, 'sec-fetch-site': 'cross-site' }]) {
     assert.equal((await post(base, { ...auth, ...headers }, initialize)).status, 403, JSON.stringify(headers));
