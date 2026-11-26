@@ -69,3 +69,9 @@ _Avoid_: weights, checkpoint
 **Unmanaged**:
 Một thứ có trên máy, cùng loại với Component, nhưng không do dotcode cài nên không có Receipt. dotcode chỉ hiển thị nó.
 _Avoid_: external, foreign, legacy
+
+## Assistant
+
+**Assistant pairing token**:
+Token bí mật trong `DOTCODE_HOME/assistant-token` (`0600`) mà user dán vào trang để được dùng chat của Assistant. Token chỉ nằm trong bộ nhớ của trang, không dùng được cho `/mcp`; Codex nhận một bearer MCP riêng.
+_Avoid_: API key, MCP token (`mcp-token` là token cho client MCP bên ngoài)

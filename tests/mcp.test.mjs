@@ -107,7 +107,7 @@ test('MCP answers read-only questions only with the owner-only bearer token', as
   const invalid = await call(4, 'tools/call', { name: 'repo_info', arguments: { githubUrl: 'https://example.test/x' } });
   assert.ok(invalid.isError);
   await unchanged();
-  assert.deepEqual((await readdir(directory)).sort(), ['catalog.json', 'inventory.json', 'mcp-token', 'receipts.json', 'workspace'], 'MCP must not write the Library or Receipts');
+  assert.deepEqual((await readdir(directory)).sort(), ['assistant-token', 'catalog.json', 'inventory.json', 'mcp-token', 'receipts.json', 'workspace'], 'MCP must not write the Library or Receipts');
 
   const hold = holdSlow();
   const pending = post(`http://127.0.0.1:${port}/api/installer/detect`, {}, { githubUrl: 'https://github.com/slow/tool' });

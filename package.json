@@ -11,6 +11,7 @@
     "test:watch": "node --import tsx --test --watch tests/*.test.*"
   },
   "dependencies": {
+    "@openai/codex-sdk": "0.172.0",
     "@vitejs/plugin-react": "^4.3.4",
     "express": "^4.21.2",
     "lucide-react": "^0.475.0",

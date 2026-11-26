@@ -7,7 +7,8 @@ import { isDeepStrictEqual } from 'node:util';
 import express from 'express';
 import { createInstaller, InstallerError } from './installer.mjs';
 import { githubKey as catalogKey, githubRepo } from './github.mjs';
-import { attachMcp, mcpToken } from './mcp.mjs';
+import { attachMcp, fileBearer, hasBearer, newBearer } from './mcp.mjs';
+import { answerChat } from './chat.mjs';
 
 const textFields = ['name', 'githubUrl', 'action', 'location', 'method', 'configurationNotes', 'version'];
 const catalogFields = ['id', 'name', 'repo', 'githubUrl', 'category', 'categoryLabel', 'description', 'primaryLanguage', 'defaultInstallCommand', 'customNotes', 'customCommand'];
@@ -107,9 +108,13 @@ async function discoverInstallations(directory, installations) {
   }
   return observed;
 }
+function loopbackAddress(address) {
+  const ip = address?.replace(/^::ffff:/, '');
+  return ip === '::1' || ip?.startsWith('127.') ? ip : undefined;
+}
+
 function isLocalRequest(req) {
-  const ip = req.socket.remoteAddress;
-  if (ip !== '::1' && !ip?.startsWith('127.') && !ip?.startsWith('::ffff:127.')) return false;
+  if (!loopbackAddress(req.socket.remoteAddress)) return false;
   const { host, origin, 'sec-fetch-site': fetchSite } = req.headers;
   if (req.headersDistinct.host?.length !== 1 || !/^(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d{1,5})?$/i.test(host)) return false;
   try {
@@ -122,6 +127,7 @@ export function attachApi(app, {
   directory = process.env.DOTCODE_HOME || path.join(homedir(), '.dotcode'),
   fetchRelease = globalThis.fetch,
   installerOptions = {},
+  createCodex = undefined,
 } = {}) {
   directory = path.resolve(directory);
   const appDirectory = fileURLToPath(new URL('..', import.meta.url));
@@ -174,8 +180,11 @@ export function attachApi(app, {
     await writeFile(temporary, JSON.stringify(state, null, 2), { mode: 0o600 });
     await rename(temporary, file);
   };
-  const token = prepare().then(() => mcpToken(path.join(directory, 'mcp-token')));
+  const prepared = prepare();
+  const token = prepared.then(() => fileBearer(path.join(directory, 'mcp-token')));
   token.catch(error => console.error(`DotCode MCP disabled: ${error.message}`));
+  const pairingToken = prepared.then(() => fileBearer(path.join(directory, 'assistant-token'), { pairing: true }));
+  pairingToken.catch(error => console.error(`DotCode Assistant disabled: ${error.message}`));
   const githubUrlSchema = { type: 'string', description: 'GitHub repository URL, e.g. https://github.com/owner/repo' };
   const whenIdle = call => args => {
     if (busy || initializingCatalog) throw new Error('Another task is running. Wait for it to finish.');
@@ -187,7 +196,9 @@ export function attachApi(app, {
     try { return await call(args); }
     finally { busy = false; }
   });
-  attachMcp(app, { isLocal: isLocalRequest, token, tools: [
+  // Opt in by name on both sides of MCP so the Assistant bearer cannot reach other tools.
+  const assistant = { token: newBearer(), tools: ['search', 'repo_info', 'detect', 'list_components'] };
+  attachMcp(app, { isLocal: isLocalRequest, token, assistant, tools: [
     { name: 'search', description: 'Search GitHub repositories (or inspect one URL / owner/repo) with Detector badges, like DotCode Search.',
       inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
       call: ({ query }) => installer.search(query) },
@@ -213,7 +224,50 @@ export function attachApi(app, {
     if (req.method !== 'GET' && !req.is('application/json')) return res.status(415).json({ error: 'JSON required.' });
     next();
   });
-  app.use('/api/ai/chat', express.json({ limit: '28mb' }));
+  let chatRunning = false;
+  // Loopback proves where a request came from, not which local user sent it.
+  app.post('/api/ai/chat', async (req, res, next) => {
+    res.setHeader('cache-control', 'no-store');
+    let paired;
+    try { paired = hasBearer(req, await pairingToken); }
+    catch { return res.status(503).json({ error: 'Assistant pairing is unavailable. Check DOTCODE_HOME/assistant-token and the server log.' }); }
+    if (!paired) return res.status(401).set('www-authenticate', 'Bearer').json({ error: 'Pair this page with DOTCODE_HOME/assistant-token.', code: 'PAIRING_REQUIRED' });
+    next();
+  }, express.json({ limit: '128kb' }), async (req, res) => {
+    const { message, githubUrl, history = [] } = req.body ?? {};
+    if (typeof message !== 'string' || !message.trim() || message.length > 4000 || !Array.isArray(history) || history.length > 8 ||
+        history.some(entry => !['user', 'assistant'].includes(entry?.role) || typeof entry.text !== 'string' || entry.text.length > 4000)) {
+      return res.status(400).json({ error: 'Enter a message of up to 4,000 characters.' });
+    }
+    let repo;
+    if (githubUrl != null) {
+      try { repo = `https://github.com/${githubRepo(githubUrl)}`; }
+      catch (error) { return res.status(400).json({ error: error.message }); }
+    }
+    // Use the accepted socket's loopback address, never a client-supplied Host.
+    const ip = loopbackAddress(req.socket.localAddress);
+    if (!ip) return res.status(403).json({ error: 'The Assistant requires a loopback connection.' });
+    const host = ip === '::1' ? '[::1]' : ip;
+    if (chatRunning) return res.status(409).json({ error: 'The Assistant is answering another question. Try again shortly.' });
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(120000)]);
+    res.once('close', () => controller.abort());
+    chatRunning = true;
+    try {
+      const reply = await answerChat({ message: message.trim(), githubUrl: repo, history: history.map(({ role, text }) => ({ role, text })),
+        mcpUrl: `http://${host}:${req.socket.localPort}/mcp`, token: assistant.token, tools: assistant.tools, signal, createCodex });
+      if (!res.destroyed) res.json({ reply });
+    } catch (error) {
+      // SDK errors can contain raw provider responses, URLs or credentials.
+      const auth = /\b(?:401|unauthorized|authentication|not logged in|api key)\b/i.test(error.message);
+      if (!res.destroyed) res.status(signal.aborted ? 504 : 502).json({ error: signal.aborted
+        ? 'Codex took too long to answer. Try again.' : auth
+          ? 'Codex sign-in failed. Set CODEX_API_KEY or sign in with the default file-backed Codex credential store.'
+          : 'Could not reach Codex or DotCode MCP. Check the connection and try again.' });
+    } finally { chatRunning = false; }
+  });
+  app.use('/api/ai/chat', (error, _req, res, _next) => res.status(error.type === 'entity.too.large' ? 413 : 400)
+    .json({ error: error.type === 'entity.too.large' ? 'Chat request is too large.' : 'Invalid chat request.' }));
   app.use('/api', express.json({ limit: '512kb' }));
   const installerFailure = (res, error) => res.status(['CONFLICT', 'BUSY'].includes(error.code) ? 409 : 400).json({ error: error.message, code: error.code });
   // ponytail: keep only the latest search batch; superseded refreshes require a new Search.

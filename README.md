@@ -11,7 +11,7 @@ installation controls.
 
 ## Get Started
 
-You need **Node.js and npm**.
+You need **Node.js 24 and npm**.
 
 Run these commands from the repository root:
 
@@ -46,6 +46,34 @@ and older app installs without a Receipt. The scan is read-only and flags name
 and port conflicts. If an existing install blocks a new one, resolve it yourself;
 DotCode does not remove it or run its old lifecycle scripts.
 
+### Ask the Assistant
+
+Select **Ask assistant** on a Card, or open **Assistant** and include a GitHub
+repository name or URL in your question. The integrated Codex SDK reads repository
+metadata and READMEs through a server-enforced subset of DotCode’s read-only
+MCP tools. The Assistant disables Codex’s shell and code mode and starts in a
+read-only sandbox with network access and approvals disabled. This constrains
+sandboxed commands, not Codex itself: Codex still contacts its provider and
+DotCode MCP. The sandbox is not a filesystem read boundary.
+
+The first time you open the Assistant on a page, paste the token from
+`DOTCODE_HOME/assistant-token` (owner-only, `0600`). The page keeps it in memory
+and sends it only with chat requests; reload to forget it. DotCode gives Codex a
+separate per-start MCP bearer that can call only the tools listed above. To rotate
+the pairing token, delete the file and restart DotCode.
+
+Set `CODEX_API_KEY` in the server environment, or sign in with `codex login`
+using Codex’s default file-backed credential store. Codex ignores
+`OPENAI_API_KEY` and `OPENAI_BASE_URL`, so DotCode does not forward them. DotCode’s bundled Codex reads
+`auth.json` from the server’s `CODEX_HOME` (default `~/.codex`). It ignores
+`config.toml`, including any setting that changes the credential store, so a
+keyring-only login is not sufficient. It also ignores rules, hooks, plugins,
+memories, and your MCP servers. Codex still reads `$CODEX_HOME/AGENTS.md` and
+may read personal skills. Chat history stays in the open page; each request
+sends recent turns to Codex, and reloading clears it.
+While the Assistant runs the Detector, Install and other installer actions report
+that another task is running; retry when the answer arrives.
+
 ## Your Workspace
 
 DotCode keeps managed data outside this repository, under `~/.dotcode` by default:
@@ -55,6 +83,7 @@ DotCode keeps managed data outside this repository, under `~/.dotcode` by defaul
   catalog.json     Your library, notes, and tags
   inventory.json   Installation records and run logs
   mcp-token        Bearer token for /mcp (owner read/write only)
+  assistant-token  Pairing token for the in-app Assistant (owner read/write only)
 ```
 
 This directory holds machine-local data, not application source. Keep it out of Git.
@@ -77,7 +106,7 @@ Set environment variables when starting the server. See `.env.example` for basic
 
 **Keep DotCode local.** Do not expose it as an unauthenticated public service, including through a reverse proxy. DotCode listens only on loopback by default. Changing `HOST` changes the listener address; API writes still require a loopback connection, a local `Host`, and a same-origin `Origin` header if sent.
 
-The loopback check uses the immediate socket peer. A reverse proxy that connects to DotCode over loopback is inside that trust boundary: DotCode sees the proxy as the peer even when the original client is remote.
+The loopback check uses the immediate socket peer. A reverse proxy that connects to DotCode over loopback is inside that trust boundary: DotCode sees the proxy as the peer even when the original client is remote. The Assistant’s chat route also requires the pairing token, so another local OS user who cannot read `DOTCODE_HOME/assistant-token` cannot start Codex. Other UI routes still rely on the loopback and same-origin checks.
 
 ## Ask an agent over MCP
 
@@ -130,9 +159,9 @@ and `npm run build` bundles it for `npm start`. The entry and styles are
 
 With the app open in an Orca browser tab, run
 `node tests/check-ui.mjs <browserPageId>` for the UI interaction check.
-For the app's Search/Add flow, run
-`node tests/check-github-ui.mjs <browserPageId>` against a local app tab. Its
-browser fixtures cover search recovery, stale responses and Add without writing Cards.
+For Search/Add and Assistant, run `node tests/check-github-ui.mjs <browserPageId>`
+against a local app tab. Browser fixtures cover Search/Add and chat replies,
+sign-in errors, and connection errors without writing Cards or calling Codex.
 
 | Command | Purpose |
 | --- | --- |
