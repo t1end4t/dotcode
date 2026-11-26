@@ -179,9 +179,15 @@ test('Unmanaged scan lists CLIs, skills, subagents, plugins and units without a 
   await writeFile(at('.claude/plugins/installed_plugins.json'), JSON.stringify({ version: 2, plugins: {
     'tool@market': [{ installPath: at('.claude/plugins/cache/tool') }], 'nix@market': [{ installPath: path.join(nix, 'pkg') }],
   } }));
-  await writeFile(at('.codex/config.toml'), 'model = "x"\n[plugins."lint@market"]\nenabled = true\n[plugins."nix@market"]\nenabled = true\n');
-  await mkdir(at('.codex/plugins/cache/market'), { recursive: true });
-  await symlink(path.join(nix, 'pkg'), at('.codex/plugins/cache/market/nix'));
+  await writeFile(at('.codex/config.toml'), 'model = "x"\n[plugins]\n"lint@market" = { enabled = true }\n"not-installed-inline@market" = { enabled = true }\n[plugins."disabled@market"]\nenabled = false\n[plugins."missing@market"]\nenabled = true\n[plugins."nix@market"]\nenabled = true\n');
+  const codexCache = at('.codex/plugins/cache/market');
+  for (const [name, version] of [['lint', '1.2.3'], ['disabled', 'local'], ['cache-only', 'local']]) {
+    const manifest = path.join(codexCache, name, version, '.codex-plugin');
+    await mkdir(manifest, { recursive: true });
+    await writeFile(path.join(manifest, 'plugin.json'), JSON.stringify({ name }));
+  }
+  await mkdir(path.join(codexCache, 'missing', 'not a version'), { recursive: true });
+  await symlink(path.join(nix, 'pkg'), path.join(codexCache, 'nix'));
   await mkdir(at('.config/systemd/user/default.target.wants'), { recursive: true });
   await writeFile(at('.config/systemd/user/dotcode-9router.service'), 'ExecStart=/usr/bin/env 9router --host 127.0.0.1 --port 20128\n');
   await writeFile(at('.config/systemd/user/other-9router.service'), 'Environment=PORT=20128\nExecStart=/bin/router\n');
@@ -200,16 +206,34 @@ test('Unmanaged scan lists CLIs, skills, subagents, plugins and units without a 
     ['cli', 'foreign', null],
     ['skill', 'mine', 'claude'], ['skill', 'review', 'claude'],
     ['subagent', 'helper', 'claude'], ['subagent', 'helper', 'codex'],
-    ['plugin', 'lint@market', 'codex'], ['plugin', 'tool@market', 'claude'],
+    ['plugin', 'cache-only@market', 'codex'], ['plugin', 'disabled@market', 'codex'], ['plugin', 'lint@market', 'codex'], ['plugin', 'tool@market', 'claude'],
     ['service', 'dotcode-9router.service', null], ['service', 'listener.service', null], ['service', 'other-9router.service', null],
   ]);
   assert.equal(items[0].path, path.join(bin, 'foreign'));
+  assert.equal(items.find(item => item.name === 'lint@market').path, path.join(codexCache, 'lint'));
   assert.deepEqual(items.filter(item => item.kind === 'service').map(item => item.ports), [[20128], [port], [20128]]);
   assert.ok(warnings.some(warning => /skill review .*same name as a DotCode Component/.test(warning)));
   assert.ok(warnings.some(warning => /Port 20128 .*dotcode-9router\.service.*other-9router\.service/.test(warning)));
   if (process.platform === 'linux') assert.ok(warnings.some(warning => warning.includes(`Port ${port}`) && warning.includes('already listening')));
   assert.equal(calls.length, commandCount);
   assert.deepEqual(await Promise.all([tree(root), tree(path.dirname(directory))]), before);
+});
+
+test('only the matching installation is hidden when a repo has a Receipt', async t => {
+  const { installer, install, root } = await fixture(t, { searchPath: '' });
+  await install();
+  const [receipt] = (await installer.snapshot()).receipts;
+  const records = [
+    { name: 'Old desktop app', githubUrl, installed: true, kind: 'desktop-app', location: path.join(root, 'old-app') },
+    { name: receipt.name, githubUrl, installed: true, kind: 'skill', location: path.join(root, 'old-skill') },
+    { name: receipt.name, githubUrl: 'https://github.com/EXAMPLE/SKILLS.GIT/', installed: true, location: receipt.activations.claude.path },
+    { name: 'Store record', githubUrl, installed: true, location: receipt.storePath },
+  ];
+  const legacyApps = async () => (await installer.unmanaged(records)).items.filter(item => item.kind === 'app').map(item => item.name);
+  assert.deepEqual(await legacyApps(), ['Old desktop app', receipt.name]);
+  await rm(receipt.activations.claude.path);
+  await mkdir(receipt.activations.claude.path);
+  assert.deepEqual(await legacyApps(), ['Old desktop app', receipt.name, receipt.name]);
 });
 
 test('execution rechecks ownership after planning, rejects once, and preserves the other Activation', async t => {

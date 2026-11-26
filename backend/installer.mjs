@@ -1,4 +1,4 @@
-import { createGithub, referenceBadge } from './github.mjs';
+import { createGithub, githubKey, referenceBadge } from './github.mjs';
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -19,8 +19,8 @@ const legacyInstallKinds = new Map([['files', 'skill'], ['nix', 'cli']]);
 
 function source(value) {
   if (!value || typeof value.githubUrl !== 'string' || !/^https:\/\/github\.com\/[\w-]+\/[\w.-]+\/?$/.test(value.githubUrl)) throw new InstallerError('INVALID_INPUT', 'Use a GitHub repository URL.');
-  const githubUrl = value.githubUrl.replace(/\/$/, '').replace(/\.git$/, '').toLowerCase();
-  if (['.', '..'].includes(githubUrl.split('/').at(-1))) throw new InstallerError('INVALID_INPUT', 'Invalid repository name.');
+  const githubUrl = githubKey(value.githubUrl);
+  if (['.', '..', ''].includes(githubUrl.split('/').at(-1))) throw new InstallerError('INVALID_INPUT', 'Invalid repository name.');
   const subpath = value.subpath ?? '';
   if (typeof subpath !== 'string' || subpath.length > 1000 || (subpath && !subpath.split('/').every(part => /^[\w.-]+$/.test(part) && !['.', '..', '.git'].includes(part)))) throw new InstallerError('INVALID_INPUT', 'Use a relative skill directory without traversal.');
   const ref = value.ref ?? 'HEAD';
@@ -28,7 +28,7 @@ function source(value) {
   return { githubUrl, subpath, ref };
 }
 
-export function createInstaller({ directory, home = homedir(), run = promisify(execFile), fetchRemote = globalThis.fetch, now = Date.now, searchPath = process.env.PATH ?? '', env = process.env, nixRoots = ['/nix/store'] } = {}) {
+export function createInstaller({ directory, home = homedir(), run = promisify(execFile), fetchRemote = globalThis.fetch, now = Date.now, searchPath = process.env.PATH ?? '', env = process.env, nixRoots = ['/nix/store'], loadInstallations = async () => [] } = {}) {
   home = path.resolve(home);
   directory = path.resolve(directory ?? process.env.DOTCODE_HOME ?? path.join(home, '.dotcode'));
   const contains = (root, target) => target === root || target.startsWith(root + path.sep);
@@ -99,8 +99,9 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       await checkParents(target);
       const info = await optionalStat(target);
       if (info && installingReceipts) {
-        if (!installingReceipts.some(item => Object.values(item.activations).some(entry => entry.path === target))) {
-          throw new InstallerError('CONFLICT', `Unmanaged ${receipt.kind} ${receipt.name} at ${target} blocks this install. Resolve the conflict yourself first; DotCode will not change it.`);
+        if (!installingReceipts.some(item => kinds.get(item.kind).activationKeys.some(key => item.activations[key].path === target))) {
+          const label = fromNix(await resolved(target)) ? 'Nix-managed' : 'Unmanaged';
+          throw new InstallerError('CONFLICT', `${label} ${receipt.kind} ${receipt.name} at ${target} blocks this install. Resolve the conflict yourself first; DotCode will not change it.`);
         }
         conflict(target);
       }
@@ -123,15 +124,64 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     })) };
   }
 
+  async function matchesInstallation(item, target, receipt) {
+    if ((item.kind && item.kind !== receipt.kind) || (item.componentId && item.componentId !== receipt.id)) return false;
+    if (!path.isAbsolute(target) || githubKey(item.githubUrl) !== githubKey(receipt.recipe.source.githubUrl)) return false;
+    const store = target === receipt.storePath;
+    const kind = kinds.get(receipt.kind);
+    if (!store && !kind.activationKeys.some(key => receipt.activations[key].path === target)) return false;
+    try {
+      await checkParents(target);
+      const info = await optionalStat(target);
+      return Boolean(info && await (store ? kind.ownsStore : kind.ownsActivation)(receipt, target, info));
+    } catch { return false; }
+  }
+
+  const installationPath = item => typeof item.location === 'string' ? item.location : '';
+  const resolved = target => realpath(target).catch(() => null);
+  const fromNix = target => target && nixRoots.some(root => contains(root, target));
+  const pathDirectories = [...new Set(searchPath.split(path.delimiter).filter(entry => path.isAbsolute(entry)).map(entry => path.resolve(entry)))];
+  const isExecutable = info => info?.isFile() && (info.mode & 0o111);
+  async function isUnmanagedInstallation(item, receipts) {
+    if (!item?.installed || typeof item.githubUrl !== 'string') return false;
+    const location = installationPath(item);
+    const target = path.isAbsolute(location) ? path.resolve(location) : location;
+    if (path.isAbsolute(target) && (fromNix(target) || fromNix(await resolved(target)))) {
+      // The old DotCode workspace had its own Nix profiles, but did not create Receipts.
+      const workspace = await resolved(path.join(directory, 'workspace'));
+      if (!workspace || workspace === directory || !contains(directory, workspace) ||
+        !/^[\w-]+\/profile$/.test(path.relative(path.join(workspace, 'apps'), target))) return false;
+    }
+    for (const receipt of receipts) if (await matchesInstallation(item, target, receipt)) return false;
+    return true;
+  }
+
+  async function inventory(installations) {
+    const { receipts } = await state();
+    const visible = await Promise.all(installations.map(item => !item?.installed || isUnmanagedInstallation(item, receipts)));
+    return installations.filter((_, index) => visible[index]);
+  }
+
+  async function checkUnmanagedInstall(value, kind, receipts, id) {
+    for (const item of await loadInstallations()) {
+      if (typeof item?.githubUrl !== 'string' || githubKey(item.githubUrl) !== githubKey(value.githubUrl) ||
+        (item.kind && item.kind !== kind) || (item.componentId && item.componentId !== id)) continue;
+      if (await isUnmanagedInstallation(item, receipts)) {
+        const target = installationPath(item);
+        const name = typeof item.name === 'string' ? item.name : value.githubUrl.split('/').at(-1);
+        throw new InstallerError('CONFLICT', `Unmanaged ${name} blocks this install${target ? ` at ${target}` : ''}. Resolve the existing installation yourself first; DotCode will not change it.`);
+      }
+    }
+  }
+
   // Read-only: Unmanaged items are shown, never adopted, changed or removed.
-  async function unmanaged(installations = []) {
+  async function unmanaged(installations) {
+    installations ??= await loadInstallations();
     const { receipts } = await state();
     const owned = new Set();
     const items = [];
     const warnings = [];
     const entries = async folder => (await readdir(folder).catch(() => [])).filter(name => !name.startsWith('.')).map(name => path.join(folder, name));
-    const resolved = target => realpath(target).catch(() => null);
-    const fromNix = target => target && nixRoots.some(root => contains(root, target));
     const canonicalPath = async target => {
       const parent = await resolved(path.dirname(target));
       return parent && path.join(parent, path.basename(target));
@@ -157,10 +207,9 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       try { return (await handle.stat()).isFile() ? await handle.readFile('utf8') : ''; }
       finally { await handle.close(); }
     };
-    for (const bin of new Set(searchPath.split(path.delimiter).filter(entry => path.isAbsolute(entry)).map(entry => path.resolve(entry)))) {
+    for (const bin of pathDirectories) {
       if (await found(bin)) for (const target of await entries(bin)) {
-        const info = await found(target);
-        if (info?.isFile() && info.mode & 0o111) items.push({ kind: 'cli', name: path.basename(target), path: target });
+        if (isExecutable(await found(target))) items.push({ kind: 'cli', name: path.basename(target), path: target });
       }
     }
     for (const [agent, folder] of [['codex', '.agents/skills'], ['codex', '.codex/skills'], ['claude', '.claude/skills']]) {
@@ -181,12 +230,18 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
         }
       }
     } catch { warnings.push(`Could not read ${claudePlugins}.`); }
-    const codexConfig = path.join(home, '.codex/config.toml');
-    // ponytail: only `[plugins."name@market"]` tables; parse TOML fully when other forms are needed.
-    for (const [, name, plugin, market] of (await readConfig(codexConfig)).matchAll(/^\s*\[plugins\."(([\w.-]+)@([\w.-]+))"\]/gm)) {
-      if ([plugin, market].some(part => ['.', '..'].includes(part))) continue;
-      const cache = path.join(home, '.codex/plugins/cache', market, plugin);
-      if (!fromNix(await resolved(cache))) items.push({ kind: 'plugin', name, agent: 'codex', path: codexConfig });
+    // Codex config controls enablement; a version directory in its cache records installation.
+    const codexCache = path.join(env.CODEX_HOME || path.join(home, '.codex'), 'plugins/cache');
+    for (const market of await entries(codexCache)) {
+      if (!/^[\w-]+$/.test(path.basename(market)) || !(await found(market))?.isDirectory()) continue;
+      for (const plugin of await entries(market)) {
+        if (!/^[\w-]+(?:\.[\w-]+)*$/.test(path.basename(plugin)) || !(await found(plugin))?.isDirectory()) continue;
+        for (const version of await entries(plugin)) {
+          if (!/^[\w.+-]+$/.test(path.basename(version)) || !(await optionalStat(version))?.isDirectory() || !(await found(version))?.isDirectory()) continue;
+          items.push({ kind: 'plugin', name: `${path.basename(plugin)}@${path.basename(market)}`, agent: 'codex', path: plugin });
+          break;
+        }
+      }
     }
     for (const target of await entries(path.join(home, '.config/systemd/user'))) {
       if (!/\.(?:service|socket|timer|target|path|mount|automount|slice|scope|swap|device)$/.test(target) || !(await found(target))?.isFile()) continue;
@@ -195,16 +250,15 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       const ports = [...new Set([...unit.matchAll(/(?:--port[= \t]+|\bPORT=|^\s*ListenStream\s*=\s*(?:[^\s]+:)?)["']?(\d{1,5})\b/gm)].map(match => Number(match[1])).filter(port => port > 0 && port <= 65535))];
       items.push({ kind: 'service', name: path.basename(target), path: target, ports });
     }
-    const managedRepos = new Set(receipts.map(receipt => receipt.recipe.source.githubUrl));
     for (const item of installations) {
-      if (!item?.installed || typeof item.name !== 'string' || typeof item.githubUrl !== 'string') continue;
-      const url = item.githubUrl.replace(/\/$/, '').replace(/\.git$/i, '').toLowerCase();
-      const target = typeof item.location === 'string' ? item.location : '';
-      if (!managedRepos.has(url)) items.push({ kind: 'app', name: item.name, path: target });
+      if (typeof item?.name === 'string' && await isUnmanagedInstallation(item, receipts)) items.push({ kind: 'app', name: item.name, path: installationPath(item) });
     }
     const order = ['cli', 'skill', 'subagent', 'plugin', 'service', 'app'];
     items.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || a.name.localeCompare(b.name) || (a.agent ?? '').localeCompare(b.agent ?? '') || a.path.localeCompare(b.path));
     for (const item of items) if (receipts.some(receipt => receipt.kind === item.kind && receipt.name === item.name)) warnings.push(`Unmanaged ${item.kind} ${item.name} at ${item.path} has the same name as a DotCode Component.`);
+    for (const [name, copies] of Map.groupBy(items.filter(item => item.kind === 'cli'), item => item.name)) {
+      if (copies.length > 1) warnings.push(`Unmanaged CLI ${name} occurs in multiple PATH entries: ${copies.map(item => item.path).join(', ')}.`);
+    }
     const ports = Map.groupBy(items.flatMap(item => (item.ports ?? []).map(port => [port, item.name])), ([port]) => port);
     if (ports.size) {
       const tables = await Promise.all(['/proc/net/tcp', '/proc/net/tcp6'].map(file => readFile(file, 'utf8').catch(() => '')));
@@ -230,6 +284,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       kind = kinds.get(legacyInstallKinds.get(backend));
       if (!kind) throw new InstallerError('INVALID_INPUT', 'Unsupported Backend.');
       receipt = await kind.planInstall({ value, recipe: body.recipe, detection, receipts: saved.receipts });
+      await checkUnmanagedInstall(value, receipt.kind, saved.receipts, receipt.id);
     } else {
       receipt = saved.receipts.find(receipt => receipt.id === body.componentId);
       if (receipt) {
@@ -239,6 +294,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       if (!receipt || (body.action !== 'uninstall' && !activationKey)) throw new InstallerError('INVALID_INPUT', 'Choose an installed Component and agent.');
     }
     const current = await activations(receipt, kind, body.action === 'install' ? saved.receipts : undefined);
+    if (body.action === 'install' && receipt.kind === 'cli') await checkCliShadow(receipt, saved.receipts);
     await checkStore(receipt, kind, body.action === 'install');
     const approved = { id: randomUUID(), action: body.action, componentId: receipt.id, version: receipt.version, expiresAt: now() + 15 * 60 * 1000 };
     for (const [key, pendingPlan] of pending) if (pendingPlan.public.expiresAt < now()) pending.delete(key);
@@ -318,6 +374,8 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
         }
         return { ok: true };
       }
+      await checkUnmanagedInstall(receipt.recipe.source, receipt.kind, saved.receipts, receipt.id);
+      if (receipt.kind === 'cli') await checkCliShadow(receipt, saved.receipts);
       await checkStore(receipt, kind, true);
       await kind.installStore(receipt);
       installed = true;
@@ -418,7 +476,26 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
 
   const cliId = value => componentId(value, `cli\n${value.type}\n${value.attribute}`);
   const cliStorePath = (id, version, outputName) => storeVersionPath('store/nix', id, version, outputName);
-  const onPath = target => searchPath.split(path.delimiter).some(entry => entry && path.resolve(entry) === target);
+  const onPath = target => pathDirectories.includes(target);
+  async function checkCliShadow(receipt, receipts) {
+    const wrapperDir = path.dirname(receipt.activations.cli.path);
+    const wrapperRealDir = await resolved(wrapperDir);
+    if (!onPath(wrapperDir) && !wrapperRealDir) return;
+    const earlier = [];
+    for (const bin of pathDirectories) {
+      if (bin === wrapperDir || wrapperRealDir && await resolved(bin) === wrapperRealDir) {
+        for (const dir of earlier) {
+          const target = path.join(dir, receipt.name);
+          if (!isExecutable(await stat(target).catch(() => null))) continue;
+          const managed = fromNix(await resolved(target)) || receipts.some(item => item.kind === 'cli' && item.activations.cli.path === target);
+          const label = managed ? 'CLI' : 'Unmanaged CLI';
+          throw new InstallerError('CONFLICT', `${label} ${receipt.name} at ${target} is earlier on PATH and blocks this install. Move ${wrapperDir} ahead on PATH or resolve the conflict yourself; DotCode will not change it.`);
+        }
+        return;
+      }
+      earlier.push(bin);
+    }
+  }
   const cliDirectory = () => path.join(home, onPath(path.join(home, '.local/bin')) ? '.local/bin' : '.dotcode/bin');
   const shellQuote = value => "'" + value.replaceAll("'", "'\\''") + "'";
   const wrapper = receipt => `#!/bin/sh\n# managed-by: dotcode\n# component: ${receipt.id}\nexec ${shellQuote(path.join(receipt.storePath, 'bin', receipt.name))} "$@"\n`;
@@ -470,7 +547,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       try { meta = await nixJSON(['eval', '--json', `nixpkgs#${attribute}`, '--apply', 'p: { homepage = p.meta.homepage or null; changelog = p.meta.changelog or null; sourceUrl = p.src.url or null; }']); }
       catch (error) { warnings.push(`Could not inspect nixpkgs ${attribute}: ${error.message}`); continue; }
       const urls = [meta.homepage, meta.changelog, meta.sourceUrl].flat();
-      if (urls.some(url => typeof url === 'string' && (url.toLowerCase().replace(/\/$/, '').replace(/\.git$/, '') === value.githubUrl || url.toLowerCase().startsWith(value.githubUrl + '/')))) {
+      if (urls.some(url => typeof url === 'string' && (githubKey(url) === value.githubUrl || url.toLowerCase().startsWith(value.githubUrl + '/')))) {
         candidates.push(candidate('nixpkgs', attribute, 'Matching nixpkgs package is preferred after the repository flake on NixOS.'));
       }
     }
@@ -536,7 +613,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
   };
 
   const kinds = new Map([['skill', skill], ['cli', cli]]);
-  return { snapshot, plan, execute, unmanaged, search: github.search, inspect: github.inspect, info: github.info, detect,
+  return { snapshot, plan, execute, unmanaged, inventory, search: github.search, inspect: github.inspect, info: github.info, detect,
     refreshDetection: async card => {
       if (freshDetection(card.detection)) return card;
       const { detection, latestReleaseAt } = await github.detect(card.githubUrl);
