@@ -272,6 +272,67 @@ test('execution rechecks ownership after planning, rejects once, and preserves t
   assert.equal(await readlink(receipt.activations.codex.path), receipt.storePath);
 });
 
+test('MCP skill Plans require a matching approval and report their final status', async t => {
+  let clock = 0;
+  const { installer, directory, home, calls } = await fixture(t, { now: () => clock });
+  const propose = () => installer.plan({ action: 'install', githubUrl, subpath: 'skills/review' }, undefined, 'mcp');
+  const untouched = async () => {
+    assert.deepEqual(await installer.snapshot(), { receipts: [] });
+    assert.equal(calls.length, 0);
+    await assert.rejects(readdir(path.join(directory, 'store')), { code: 'ENOENT' });
+    await assert.rejects(readdir(home), { code: 'ENOENT' });
+  };
+  const rejected = await propose();
+  assert.equal(rejected.source, 'mcp');
+  assert.equal(rejected.status, 'pending');
+  assert.equal(rejected.link, `/#plan-${rejected.id}`);
+  assert.match(rejected.description, /review.*skills\/review.*Codex.*Claude/);
+  assert.deepEqual(installer.listPlans(), [rejected]);
+  await assert.rejects(installer.execute(rejected.id), { code: 'INVALID_PLAN' });
+  assert.equal(installer.reject(rejected.id).status, 'rejected');
+  await assert.rejects(installer.execute(rejected.id, 'mcp'), { code: 'INVALID_PLAN' });
+  assert.equal(installer.planStatus(rejected.id).status, 'rejected');
+  await untouched();
+
+  const expiring = await propose();
+  clock += 16 * 60 * 1000;
+  assert.equal(installer.planStatus(expiring.id).status, 'pending', 'MCP Plans outlive UI Plans');
+  clock = expiring.expiresAt;
+  assert.deepEqual(installer.listPlans(), []);
+  await assert.rejects(installer.execute(expiring.id, 'mcp'), { code: 'INVALID_PLAN' });
+  assert.equal(installer.planStatus(expiring.id).status, 'expired');
+  await untouched();
+
+  const stale = await propose();
+  await mkdir(directory);
+  await writeFile(path.join(directory, 'receipts.json'), '{"receipts":[]}');
+  await assert.rejects(installer.execute(stale.id, 'mcp'), { code: 'CONFLICT' });
+  assert.equal(installer.planStatus(stale.id).status, 'failed');
+  await untouched();
+
+  const changed = await propose();
+  const target = path.join(home, '.agents/skills/review');
+  await mkdir(target, { recursive: true });
+  await writeFile(path.join(target, 'keep'), 'user file');
+  await assert.rejects(installer.execute(changed.id, 'mcp'), { code: 'CONFLICT' });
+  assert.equal(installer.planStatus(changed.id).status, 'failed');
+  assert.equal(await readFile(path.join(target, 'keep'), 'utf8'), 'user file');
+  await rm(home, { recursive: true });
+  await untouched();
+
+  const valid = await propose();
+  const results = await Promise.allSettled([installer.execute(valid.id, 'mcp'), installer.execute(valid.id, 'mcp')]);
+  assert.deepEqual(results.map(result => result.status), ['fulfilled', 'rejected']);
+  assert.equal(calls.filter(([, args]) => args.includes('checkout')).length, 1);
+  const [receipt] = (await installer.snapshot()).receipts;
+  assert.equal(receipt.version, commit);
+  assert.equal(await readFile(path.join(receipt.storePath, 'SKILL.md'), 'utf8'), '# Review');
+  for (const { path: target } of Object.values(receipt.activations)) assert.equal(await readlink(target), receipt.storePath);
+  assert.equal(installer.planStatus(valid.id).status, 'done');
+  await assert.rejects(installer.execute(valid.id, 'mcp'), { code: 'INVALID_PLAN' });
+  assert.deepEqual(installer.listPlans(), []);
+});
+
 test('plans expire and stale Receipts cannot authorize mutations', async t => {
   let clock = 0;
   const { installer, install, directory } = await fixture(t, { now: () => clock });

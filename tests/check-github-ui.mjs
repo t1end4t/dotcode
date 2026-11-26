@@ -28,6 +28,7 @@ evaluate(`
   window.__savedCards = [];
   window.__installRequests = [];
   window.__chatRequests = [];
+  window.__pendingPlans = [];
   window.__slowSearch = null;
   window.__catalogReads = 0;
   window.__refreshAttempts = 0;
@@ -47,7 +48,14 @@ evaluate(`
     const url = new URL(String(input), location.href);
     if (url.pathname === '/api/ai/chat') {
       if (options.headers.authorization !== 'Bearer ' + 'p'.repeat(43)) throw new Error('Chat must send the pairing token.');
-      window.__chatRequests.push(JSON.parse(options.body));
+      const request = JSON.parse(options.body);
+      window.__chatRequests.push(request);
+      if (request.installCardId) {
+        const id = 'fixture-plan-' + window.__chatRequests.length;
+        const plan = { id, link: '/#plan-' + id, status: 'pending', description: 'Install review from skills/review for Codex and Claude.', version: 'a'.repeat(40), expiresAt: Date.now() + 3600000 };
+        window.__pendingPlans.push(plan);
+        return Response.json({ reply: 'Plan ready for approval.', plans: [plan] });
+      }
       if (window.__chatRequests.length === 1) return Response.json({ reply: 'The README describes a code review library.' });
       if (window.__chatRequests.length === 2) return Response.json({ error: 'Codex sign-in failed. Run codex login.' }, { status: 502 });
       throw new TypeError('Network error');
@@ -78,9 +86,13 @@ evaluate(`
       window.__savedCards.push(item);
       return Response.json({ item }, { status: 201 });
     }
-    if (url.pathname === '/api/installer/plan' || url.pathname === '/api/installer/execute') {
-      window.__installRequests.push([url.pathname, JSON.parse(options.body)]);
-      return Response.json(url.pathname.endsWith('/plan') ? { id: 'fixture-plan' } : { ok: true });
+    if (url.pathname === '/api/installer/plans') return Response.json({ plans: window.__pendingPlans });
+    if (['plan', 'execute', 'approve', 'reject'].some(route => url.pathname === '/api/installer/' + route)) {
+      const body = JSON.parse(options.body);
+      window.__installRequests.push([url.pathname, body]);
+      if (options.headers.authorization !== 'Bearer ' + 'p'.repeat(43)) throw new Error('Decisions must send the pairing token.');
+      window.__pendingPlans = window.__pendingPlans.filter(plan => plan.id !== body.planId);
+      return Response.json({ ok: true });
     }
     if (url.pathname === '/api/catalog' && window.__savedCards.length) {
       window.__catalogReads++;
@@ -235,11 +247,23 @@ try {
   command('wait', '--selector', '.tool-card[aria-label="review"]');
   assert.match(evaluate('return document.querySelector(\'.tool-card[aria-label="review"]\').textContent;'), /Skill.*Not installed.*Install/s);
   assert.doesNotMatch(evaluate('return document.querySelector(\'.tool-card[aria-label="review"]\').textContent;'), /Skill directory/);
-  evaluate('document.querySelector(\'.tool-card[aria-label="review"] .rt-button\').click(); return true;');
-  command('wait', '--selector', '.tool-card[aria-label="review"] .rt-button:not(:disabled)');
+  const install = `${cardSelector('review')} .rt-primary`;
+  click(install);
+  command('wait', '--text', 'Plan ready for approval.');
+  assert.equal(evaluate('return window.__chatRequests.at(-1).installCardId;'), 'fixture-review');
+  assert.deepEqual(evaluate('return window.__installRequests;'), [], 'Install must only start chat');
+  click('a[href="/#plan-fixture-plan-4"]');
+  command('wait', '--selector', '#plan-fixture-plan-4 button');
+  capture('plan', ['Install opened the selected Card in chat', 'Plan details', 'Approval and rejection controls']);
+  click('#plan-fixture-plan-4 button:last-child');
+  command('wait', '--text', 'Plan rejected.');
+  click(install);
+  command('wait', '--selector', '#plan-fixture-plan-5 button');
+  click('#plan-fixture-plan-5 button:first-child');
+  command('wait', '--text', 'Skill installed.');
   assert.deepEqual(evaluate('return window.__installRequests;'), [
-    ['/api/installer/plan', { action: 'install', githubUrl: 'https://github.com/example/review' }],
-    ['/api/installer/execute', { planId: 'fixture-plan' }],
+    ['/api/installer/reject', { planId: 'fixture-plan-4' }],
+    ['/api/installer/approve', { planId: 'fixture-plan-5' }],
   ]);
   console.log('GitHub UI checks passed.');
 } finally {

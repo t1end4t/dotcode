@@ -186,19 +186,31 @@ export function attachApi(app, {
   const pairingToken = prepared.then(() => fileBearer(path.join(directory, 'assistant-token'), { pairing: true }));
   pairingToken.catch(error => console.error(`DotCode Assistant disabled: ${error.message}`));
   const githubUrlSchema = { type: 'string', description: 'GitHub repository URL, e.g. https://github.com/owner/repo' };
-  const whenIdle = call => args => {
-    if (busy || initializingCatalog) throw new Error('Another task is running. Wait for it to finish.');
-    return call(args);
+  const whenIdle = call => (...args) => {
+    if (busy || initializingCatalog) throw new InstallerError('BUSY', 'Another task is running. Wait for it to finish.');
+    return call(...args);
   };
   // Holds the busy lock like POST /api/installer/detect so UI tasks and other MCP calls wait.
-  const exclusive = call => whenIdle(async args => {
+  const exclusive = call => whenIdle(async (...args) => {
     busy = true;
-    try { return await call(args); }
+    try { return await call(...args); }
     finally { busy = false; }
   });
+  const installerFailure = (res, error) => res.status(['CONFLICT', 'BUSY'].includes(error.code) ? 409 : error.code === 'NOT_FOUND' ? 404 : 400)
+    .json({ error: error.message, code: error.code });
+  const cardContext = exclusive(async id => {
+    const cards = await loadCatalog() ?? [];
+    const card = cards.find(card => card.id === id);
+    if (!card) throw new InstallerError('NOT_FOUND', 'Choose a Card from the Library.');
+    const refreshed = await installer.refreshDetection(card, { requireFresh: true });
+    if (refreshed !== card) await save(validateCatalog(cards.map(entry => entry === card ? refreshed : entry)), catalogPath);
+    return refreshed;
+  });
+  const mcpPlan = ({ id, ...plan }) => ({ planId: id, ...plan });
   // Opt in by name on both sides of MCP so the Assistant bearer cannot reach other tools.
-  const assistant = { token: newBearer(), tools: ['search', 'repo_info', 'detect', 'list_components'] };
-  attachMcp(app, { isLocal: isLocalRequest, token, assistant, tools: [
+  let assistant;
+  const readTools = ['search', 'repo_info', 'detect', 'list_components'];
+  attachMcp(app, { isLocal: isLocalRequest, token, assistant: () => assistant, tools: [
     { name: 'search', description: 'Search GitHub repositories (or inspect one URL / owner/repo) with Detector badges, like DotCode Search.',
       inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
       call: ({ query }) => installer.search(query) },
@@ -218,6 +230,30 @@ export function attachApi(app, {
     { name: 'list_unmanaged', description: 'List Unmanaged CLIs, skills, subagents, plugins, user units and older apps with name and port conflict warnings. Display only.',
       inputSchema: { type: 'object', properties: {} },
       call: whenIdle(() => installer.unmanaged()) },
+    { name: 'plan', readOnlyHint: false, description: 'Propose installing a detected skill from a Library Card. Returns a Plan for the user to approve; does not install anything.',
+      inputSchema: { type: 'object', additionalProperties: false, properties: {
+        action: { type: 'string', enum: ['install'] }, githubUrl: githubUrlSchema,
+        subpath: { type: 'string', description: 'Skill directory from Detector skillPaths. Use an empty string for a root skill.' },
+      }, required: ['action', 'githubUrl', 'subpath'] },
+      call: exclusive(async (args, scope) => {
+        const { action, githubUrl, subpath } = args;
+        if (action !== 'install' || typeof subpath !== 'string' || Object.keys(args).some(key => !['action', 'githubUrl', 'subpath'].includes(key))) {
+          throw new InstallerError('INVALID_INPUT', 'Select a detected skill directory for an install Plan.');
+        }
+        const key = `https://github.com/${githubRepo(githubUrl)}`;
+        const card = scope ? scope.card : (await loadCatalog() ?? []).find(card => catalogKey(card.githubUrl) === key);
+        if (!card || catalogKey(card.githubUrl) !== key) throw new InstallerError('INVALID_INPUT', 'Choose the selected Card from the Library.');
+        const detected = await installer.refreshDetection(card, { requireFresh: true });
+        if (!detected.detection.skillPaths.includes(subpath)) throw new InstallerError('INVALID_INPUT', 'Select a skill directory from the current Detector result.');
+        // The Assistant must plan against the evidence it received, not a later revision.
+        if (scope && detected !== card) throw new InstallerError('CONFLICT', 'Detector result changed. Start a new Install chat turn.');
+        const proposal = await installer.plan({ action, githubUrl: card.githubUrl, subpath }, detected.detection, 'mcp');
+        scope?.planIds.add(proposal.id);
+        return mcpPlan(proposal);
+      }) },
+    { name: 'plan_status', description: 'Look up a proposed Plan by its ID. Does not approve or execute it.',
+      inputSchema: { type: 'object', properties: { planId: { type: 'string' } }, required: ['planId'] },
+      call: ({ planId }) => mcpPlan(installer.planStatus(planId)) },
   ] });
   app.use('/api', (req, res, next) => {
     if (!isLocalRequest(req)) return res.status(403).json({ error: 'Local, same-origin requests only.' });
@@ -226,18 +262,22 @@ export function attachApi(app, {
   });
   let chatRunning = false;
   // Loopback proves where a request came from, not which local user sent it.
-  app.post('/api/ai/chat', async (req, res, next) => {
+  const requirePairing = async (req, res, next) => {
     res.setHeader('cache-control', 'no-store');
     let paired;
     try { paired = hasBearer(req, await pairingToken); }
     catch { return res.status(503).json({ error: 'Assistant pairing is unavailable. Check DOTCODE_HOME/assistant-token and the server log.' }); }
     if (!paired) return res.status(401).set('www-authenticate', 'Bearer').json({ error: 'Pair this page with DOTCODE_HOME/assistant-token.', code: 'PAIRING_REQUIRED' });
     next();
-  }, express.json({ limit: '128kb' }), async (req, res) => {
-    const { message, githubUrl, history = [] } = req.body ?? {};
+  };
+  app.post('/api/ai/chat', requirePairing, express.json({ limit: '128kb' }), async (req, res) => {
+    const { message, githubUrl, installCardId, history = [] } = req.body ?? {};
     if (typeof message !== 'string' || !message.trim() || message.length > 4000 || !Array.isArray(history) || history.length > 8 ||
         history.some(entry => !['user', 'assistant'].includes(entry?.role) || typeof entry.text !== 'string' || entry.text.length > 4000)) {
       return res.status(400).json({ error: 'Enter a message of up to 4,000 characters.' });
+    }
+    if (installCardId !== undefined && (typeof installCardId !== 'string' || !installCardId)) {
+      return res.status(400).json({ error: 'Choose a Card from the Library.' });
     }
     let repo;
     if (githubUrl != null) {
@@ -254,9 +294,18 @@ export function attachApi(app, {
     res.once('close', () => controller.abort());
     chatRunning = true;
     try {
-      const reply = await answerChat({ message: message.trim(), githubUrl: repo, history: history.map(({ role, text }) => ({ role, text })),
-        mcpUrl: `http://${host}:${req.socket.localPort}/mcp`, token: assistant.token, tools: assistant.tools, signal, createCodex });
-      if (!res.destroyed) res.json({ reply });
+      let card;
+      if (installCardId !== undefined) {
+        try { card = await cardContext(installCardId); }
+        catch (error) { return installerFailure(res, error); }
+      }
+      if (signal.aborted) return;
+      const tools = card ? [...readTools, 'plan', 'plan_status'] : readTools;
+      const scope = assistant = { token: newBearer(), tools, card, planIds: new Set() };
+      const reply = await answerChat({ message: message.trim(), githubUrl: card?.githubUrl ?? repo, card,
+        history: history.map(({ role, text }) => ({ role, text })), mcpUrl: `http://${host}:${req.socket.localPort}/mcp`,
+        token: scope.token, tools, signal, createCodex });
+      if (!res.destroyed) res.json({ reply, ...(card && { plans: installer.listPlans().filter(plan => scope.planIds.has(plan.id)) }) });
     } catch (error) {
       // SDK errors can contain raw provider responses, URLs or credentials.
       const auth = /\b(?:401|unauthorized|authentication|not logged in|api key)\b/i.test(error.message);
@@ -264,12 +313,11 @@ export function attachApi(app, {
         ? 'Codex took too long to answer. Try again.' : auth
           ? 'Codex sign-in failed. Set CODEX_API_KEY or sign in with the default file-backed Codex credential store.'
           : 'Could not reach Codex or DotCode MCP. Check the connection and try again.' });
-    } finally { chatRunning = false; }
+    } finally { assistant = undefined; chatRunning = false; }
   });
   app.use('/api/ai/chat', (error, _req, res, _next) => res.status(error.type === 'entity.too.large' ? 413 : 400)
     .json({ error: error.type === 'entity.too.large' ? 'Chat request is too large.' : 'Invalid chat request.' }));
   app.use('/api', express.json({ limit: '512kb' }));
-  const installerFailure = (res, error) => res.status(['CONFLICT', 'BUSY'].includes(error.code) ? 409 : 400).json({ error: error.message, code: error.code });
   // ponytail: keep only the latest search batch; superseded refreshes require a new Search.
   let searchCards = [];
   let searchGeneration = 0;
@@ -325,13 +373,15 @@ export function attachApi(app, {
     } catch (error) { installerFailure(res, error); }
     finally { busy = false; }
   });
-  app.post('/api/installer/execute', async (req, res) => {
+  app.get('/api/installer/plans', (_req, res) => res.json({ plans: installer.listPlans() }));
+  const planDecision = decide => async (req, res) => {
     if (typeof req.body?.planId !== 'string') return res.status(400).json({ error: 'A plan ID is required.' });
-    busy = true;
-    try { res.json(await installer.execute(req.body.planId)); }
+    try { res.json(await decide(req.body.planId)); }
     catch (error) { installerFailure(res, error); }
-    finally { busy = false; }
-  });
+  };
+  app.post('/api/installer/execute', planDecision(exclusive(id => installer.execute(id))));
+  app.post('/api/installer/approve', requirePairing, planDecision(exclusive(id => installer.execute(id, 'mcp'))));
+  app.post('/api/installer/reject', requirePairing, planDecision(whenIdle(installer.reject)));
 
   app.get('/api/inventory', async (_req, res) => {
     try {

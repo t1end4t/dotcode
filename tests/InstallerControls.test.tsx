@@ -14,14 +14,14 @@ const receipt: SkillReceipt = {
 test('Cards expose all three installation states and independent accessible agent switches', () => {
   const item = { ...INITIAL_ITEMS[0], installed: false };
   assert.equal(installationStatus(item), 'Not installed');
-  const available = renderToStaticMarkup(<SkillControls item={item} onChanged={async () => {}} onUnsupported={() => {}} />);
+  const available = renderToStaticMarkup(<SkillControls item={item} onChanged={async () => {}} onInstall={() => {}} />);
   assert.match(available, />Install<\/button>/);
   assert.doesNotMatch(available, /Skill directory|<input/);
   for (const status of ['enabled', 'disabled'] as const) {
     const saved = { ...receipt, status, activations: { ...receipt.activations, codex: { ...receipt.activations.codex, enabled: status === 'enabled' } } };
     const [installed] = mergeInstallerReceipts([item], [saved]);
     assert.equal(installationStatus(installed), status === 'enabled' ? 'Installed · Enabled' : 'Installed · Disabled');
-    const html = renderToStaticMarkup(<SkillControls item={installed} onChanged={async () => {}} onUnsupported={() => {}} />);
+    const html = renderToStaticMarkup(<SkillControls item={installed} onChanged={async () => {}} onInstall={() => {}} />);
     assert.match(html, /role="switch" aria-label="Enable review for Codex"/);
     assert.match(html, /role="switch" aria-label="Enable review for Claude" aria-checked="false"/);
     assert.match(html, new RegExp(`aria-label="Enable review for Codex" aria-checked="${status === 'enabled'}"`));
@@ -34,7 +34,7 @@ test('Cards expose all three installation states and independent accessible agen
 test('an installed app without a Receipt is Unmanaged and display-only', () => {
   const legacy = { ...INITIAL_ITEMS[0], installed: true, installedSkills: [] };
   assert.equal(installationStatus(legacy), 'Installed · Unmanaged');
-  const html = renderToStaticMarkup(<SkillControls item={legacy} onChanged={async () => {}} onUnsupported={() => {}} />);
+  const html = renderToStaticMarkup(<SkillControls item={legacy} onChanged={async () => {}} onInstall={() => {}} />);
   assert.doesNotMatch(html, /<button/);
   assert.match(html, /Unmanaged · display only/);
 });

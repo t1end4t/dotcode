@@ -89,7 +89,8 @@ const stateLabels = { available: "Not installed", enabled: "Installed · Enabled
 const kindLabels = { cli: "CLI", "desktop-app": "Desktop app", skill: "Skill", mcp: "MCP" };
 const icons = { cli: Terminal, "desktop-app": Monitor, skill: BookOpen, mcp: MessageSquare };
 const actionLabels = { install: "Install", enable: "Enable", disable: "Disable", uninstall: "Uninstall" };
-type Message = { role: "user" | "assistant"; text: string };
+type Plan = { id: string; description: string; version: string; expiresAt: number };
+type Message = { role: "user" | "assistant"; text: string; planIds?: string[] };
 
 function ConnectedLibrary() {
   const catalog = useCatalog();
@@ -116,6 +117,13 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatPending, setChatPending] = useState(false);
   const [chatError, setChatError] = useState("");
+  // Install waits here while the page is not paired.
+  const [installCard, setInstallCard] = useState<Card | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [planNotice, setPlanNotice] = useState("");
+  const [planError, setPlanError] = useState("");
+  const [decidingPlan, setDecidingPlan] = useState(false);
+  const plansHeading = useRef<HTMLHeadingElement>(null);
   // Held only by this page so reloads and other tabs must pair again.
   const [pairingToken, setPairingToken] = useState("");
   const [pairingDraft, setPairingDraft] = useState("");
@@ -131,6 +139,7 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
   const uninstallDialog = useRef<HTMLDialogElement>(null);
   const addDialog = useRef<HTMLDialogElement>(null);
   const chatInput = useRef<HTMLTextAreaElement>(null);
+  const pairingInput = useRef<HTMLInputElement>(null);
   const chatToggle = useRef<HTMLButtonElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
   const uninstallTrigger = useRef<HTMLButtonElement | null>(null);
@@ -146,6 +155,14 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
   useEffect(() => { if (chatOpen) chatEnd.current?.scrollIntoView({ block: "nearest" }); }, [chatOpen, messages, chatPending, chatError]);
   useEffect(() => () => searchRequest.current?.abort(), []);
   useEffect(() => { if (uninstallRepo) uninstallDialog.current?.showModal(); }, [uninstallRepo]);
+  const loadPlans = () => fetch("/api/installer/plans").then(readApiJson).then(data => setPlans(data.plans), () => {});
+  useEffect(() => {
+    if (!catalog) return;
+    void loadPlans();
+    // Plan links from Codex CLI or Claude Code arrive as hash changes.
+    window.addEventListener("hashchange", loadPlans);
+    return () => window.removeEventListener("hashchange", loadPlans);
+  }, []);
 
   const act = (card: Card, action: Action) => {
     const nextState = action === "uninstall" ? "available" : action === "disable" ? "disabled" : "enabled";
@@ -170,24 +187,55 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
       setDraft("");
       return;
     }
+    if (await sendChat(user, { message, githubUrl: context?.source?.githubUrl })) setDraft("");
+  };
+  const sendChat = async (user: Message, request: { message: string; githubUrl?: string; installCardId?: string }, token = pairingToken) => {
     setChatError("");
     setChatPending(true);
     setMessages(previous => [...previous, user]);
     try {
       const response = await fetch("/api/ai/chat", {
-        method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${pairingToken}` },
-        body: JSON.stringify({ message, githubUrl: context?.source?.githubUrl,
+        method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...request,
           history: messages.slice(-8).map(({ role, text }) => ({ role, text: text.slice(0, 4000) })) }),
       });
       if (response.status === 401) setPairingToken("");
-      const { reply } = await readApiJson(response);
+      const { reply, plans: proposed = [] } = await readApiJson(response);
       if (typeof reply !== "string" || !reply.trim()) throw new Error("Codex returned an empty answer. Try again.");
-      setMessages(previous => [...previous, { role: "assistant", text: reply }]);
-      setDraft("");
+      setMessages(previous => [...previous, { role: "assistant", text: reply, planIds: proposed.map((plan: Plan) => plan.id) }]);
+      if (proposed.length) void loadPlans();
+      return true;
     } catch (error) {
       setMessages(previous => previous.slice(0, -1));
       setChatError(error instanceof Error && !(error instanceof TypeError) ? error.message : "Could not reach DotCode. Check the connection and try again.");
+      return false;
     } finally { setChatPending(false); }
+  };
+  // Install only opens chat with the Card; the server attaches the saved Card and a fresh Detector result.
+  const startInstall = (card: Card, token = pairingToken) => {
+    setContextRepo(card.repo); setChatOpen(true);
+    if (!token || !card.source) { setInstallCard(card); requestAnimationFrame(() => pairingInput.current?.focus()); return; }
+    setInstallCard(null);
+    const message = `Install ${card.name}.`;
+    void sendChat({ role: "user", text: `[${card.repo}] ${message}` }, { message, installCardId: card.source.id }, token);
+  };
+  const decidePlan = async (plan: Plan, decision: "approve" | "reject") => {
+    setDecidingPlan(true); setPlanError(""); setPlanNotice("");
+    try {
+      const response = await fetch(`/api/installer/${decision}`, {
+        method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${pairingToken}` }, body: JSON.stringify({ planId: plan.id }),
+      });
+      if (response.status === 401) setPairingToken("");
+      await readApiJson(response);
+      setPlanNotice(decision === "approve" ? "Skill installed." : "Plan rejected.");
+      if (decision === "approve") await catalog?.refreshCatalog();
+    } catch (error) {
+      setPlanError(error instanceof Error && !(error instanceof TypeError) ? error.message : "Could not reach DotCode. Check the connection and try again.");
+    } finally {
+      await loadPlans();
+      setDecidingPlan(false);
+      plansHeading.current?.focus();
+    }
   };
   const editRepoQuery = (value: string) => {
     searchRequest.current?.abort();
@@ -268,8 +316,20 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
           <p className="card-description">{card.description}</p>
           {card.source && <div className="card-meta discovery-meta"><span><Star size={12} />{(card.source.stars ?? 0).toLocaleString("en-US")} stars</span><span>{card.language}</span>{card.source.latestReleaseAt && <span>Latest release: <time dateTime={card.source.latestReleaseAt}>{card.source.latestReleaseAt.slice(0, 10)}</time></span>}</div>}
           <div className="card-installation"><span className={`status ${card.state}`}><span className="status-dot" />{card.referenceBadge ? "Not installable" : stateLabels[card.state]}</span><span className="version">{card.state !== "available" ? <><code>{card.version}</code><span>{card.backend}</span></> : card.language || "Details unavailable"}</span></div>
-          <footer className="card-actions"><button className="text-button ask-ai" disabled={chatPending} onClick={() => askAbout(card)} aria-label={`Ask assistant about ${card.name}`}><MessageSquare size={14} />Ask assistant</button>{!card.referenceBadge && <div>{card.source && catalog ? <SkillControls item={card.source} onChanged={catalog.refreshCatalog} onUnsupported={() => setAnnouncement("This Library currently installs skills only. Other repository installation options are not connected yet.")} /> : card.state === "available" ? <button className="button install-button" disabled={card.backend === "—"} title={card.backend === "—" ? "Installation details are unavailable in this prototype" : undefined} aria-label={`Install ${card.name}`} onClick={() => act(card, "install")}><Download size={14} />Install</button> : <><button className="text-button uninstall-button" aria-label={`Uninstall ${card.name}`} onClick={event => requestUninstall(card, event.currentTarget)}>Uninstall</button><button className="enable-switch" role="switch" aria-checked={card.state === "enabled"} aria-label={`Enable ${card.name}`} onClick={() => act(card, card.state === "enabled" ? "disable" : "enable")}><span className="sr-only">{card.state === "enabled" ? "Enabled" : "Disabled"}</span><span className="switch-track"><span /></span></button></>}</div>}</footer>
+          <footer className="card-actions"><button className="text-button ask-ai" disabled={chatPending} onClick={() => askAbout(card)} aria-label={`Ask assistant about ${card.name}`}><MessageSquare size={14} />Ask assistant</button>{!card.referenceBadge && <div>{card.source && catalog ? <SkillControls item={card.source} onChanged={catalog.refreshCatalog} onInstall={() => startInstall(card)} installDisabled={chatPending} /> : card.state === "available" ? <button className="button install-button" disabled={card.backend === "—"} title={card.backend === "—" ? "Installation details are unavailable in this prototype" : undefined} aria-label={`Install ${card.name}`} onClick={() => act(card, "install")}><Download size={14} />Install</button> : <><button className="text-button uninstall-button" aria-label={`Uninstall ${card.name}`} onClick={event => requestUninstall(card, event.currentTarget)}>Uninstall</button><button className="enable-switch" role="switch" aria-checked={card.state === "enabled"} aria-label={`Enable ${card.name}`} onClick={() => act(card, card.state === "enabled" ? "disable" : "enable")}><span className="sr-only">{card.state === "enabled" ? "Enabled" : "Disabled"}</span><span className="switch-track"><span /></span></button></>}</div>}</footer>
         </article>; })}</div> : <div className="empty"><Search size={24} /><h2>{cards.length ? "No matching repositories" : "Your Library is empty"}</h2><p>{cards.length ? "Try another search or clear your filters." : "Use Add repository to search GitHub and save your first Card."}</p>{cards.length > 0 && <button className="button" onClick={() => { setQuery(""); setKind("all"); setStatus("all"); }}>Clear filters</button>}</div>}
+        {catalog && <section className="unmanaged-inventory pending-plans" aria-labelledby="plans-heading">
+          <h2 id="plans-heading" ref={plansHeading} tabIndex={-1}>Pending Plans</h2>
+          <p>Proposed by the Assistant or another MCP client. Nothing installs until you approve.</p>
+          {planNotice && <p role="status">{planNotice}</p>}
+          {planError && <p role="alert" className="library-error">{planError}</p>}
+          {!pairingToken && plans.length > 0 && <p>Pair this page in the Assistant to approve or reject.</p>}
+          {plans.length ? <ul aria-label="Pending Plans">{plans.map(plan => <li key={plan.id} id={`plan-${plan.id}`}>
+            <strong>{plan.description}</strong>
+            <br />Version <code>{plan.version.slice(0, 12)}</code> · expires <time dateTime={new Date(plan.expiresAt).toISOString()}>{new Date(plan.expiresAt).toLocaleTimeString()}</time>
+            <div className="plan-actions"><button className="button primary" disabled={decidingPlan || !pairingToken} onClick={() => void decidePlan(plan, "approve")}>Approve</button><button className="button" disabled={decidingPlan || !pairingToken} onClick={() => void decidePlan(plan, "reject")}>Reject</button></div>
+          </li>)}</ul> : <p>No pending Plans.</p>}
+        </section>}
         {catalog && <section className="unmanaged-inventory" aria-labelledby="unmanaged-heading">
           <h2 id="unmanaged-heading">Unmanaged</h2>
           <p>Found on this machine, not managed by DotCode. Display only.</p>
@@ -284,18 +344,19 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
             </details> : <p>No Unmanaged items found.</p>}
           </>}
         </section>}
-        <footer className="library-footer"><span><Github size={13} />Repository descriptions from GitHub About.</span><span>{catalog ? "Cards saved to Library · read-only assistant" : "Demo installations · reload to reset"}</span></footer>
+        <footer className="library-footer"><span><Github size={13} />Repository descriptions from GitHub About.</span><span>{catalog ? "Cards saved to Library · installs need your approval" : "Demo installations · reload to reset"}</span></footer>
       </main>
       <aside id="assistant" className="assistant" aria-label="Assistant" hidden={!chatOpen} onKeyDown={event => { if (event.key === "Escape") closeChat(); }}>
-        <header className="assistant-header"><div><MessageSquare size={16} /><h2>Assistant</h2><span className="demo-label">{catalog ? "Read-only" : "Demo"}</span></div><button className="icon-button" onClick={closeChat} aria-label="Close assistant"><PanelRightClose size={17} /></button></header>
-        <div className="chat-messages" role="log" aria-label="Conversation"><div className="chat-intro"><h3>{context ? context.name : "Ask about a repository"}</h3><p>{context ? context.description : "Select Ask assistant on a Card or include a GitHub repository in your question."}</p><div className="assistant-mode">{catalog ? "Powered by Codex. The Assistant can look up repositories but cannot install or change anything." : "Preview only. AI is not connected."}</div>{!catalog && <button className="chat-suggestion" onClick={() => { setContextRepo("ggml-org/llama.cpp"); setDraft("Help me install llama.cpp on this machine"); chatInput.current?.focus(); }}><span>Install llama.cpp</span><ArrowRight size={14} /></button>}<button className="chat-suggestion" disabled={chatPending} onClick={() => { setDraft("Review the tools I have installed"); chatInput.current?.focus(); }}><span>Review installed tools</span><ArrowRight size={14} /></button></div>{messages.map((message, index) => <div key={index} className={`chat-message ${message.role}`}><span>{message.role === "user" ? "You" : catalog ? "Assistant" : "Assistant · demo"}</span><p>{message.text}</p></div>)}{chatPending && <p className="chat-message" role="status">Waiting for Codex…</p>}{chatError && <p className="chat-message chat-error" role="alert">{chatError}</p>}<div ref={chatEnd} /></div>
+        <header className="assistant-header"><div><MessageSquare size={16} /><h2>Assistant</h2><span className="demo-label">{catalog ? "Approval required" : "Demo"}</span></div><button className="icon-button" onClick={closeChat} aria-label="Close assistant"><PanelRightClose size={17} /></button></header>
+        <div className="chat-messages" role="log" aria-label="Conversation"><div className="chat-intro"><h3>{context ? context.name : "Ask about a repository"}</h3><p>{context ? context.description : "Select Ask assistant on a Card or include a GitHub repository in your question."}</p><div className="assistant-mode">{catalog ? "Powered by Codex. The Assistant can look up repositories and propose Plans. Nothing installs until you approve a Plan." : "Preview only. AI is not connected."}</div>{!catalog && <button className="chat-suggestion" onClick={() => { setContextRepo("ggml-org/llama.cpp"); setDraft("Help me install llama.cpp on this machine"); chatInput.current?.focus(); }}><span>Install llama.cpp</span><ArrowRight size={14} /></button>}<button className="chat-suggestion" disabled={chatPending} onClick={() => { setDraft("Review the tools I have installed"); chatInput.current?.focus(); }}><span>Review installed tools</span><ArrowRight size={14} /></button></div>{messages.map((message, index) => <div key={index} className={`chat-message ${message.role}`}><span>{message.role === "user" ? "You" : catalog ? "Assistant" : "Assistant · demo"}</span><p>{message.text}</p>{message.planIds?.map(id => <a key={id} className="text-button" href={`/#plan-${id}`}>Review Plan</a>)}</div>)}{chatPending && <p className="chat-message" role="status">Waiting for Codex…</p>}{chatError && <p className="chat-message chat-error" role="alert">{chatError}</p>}<div ref={chatEnd} /></div>
         {context && <div className="chat-context"><div><Github size={14} /><strong>{context.name}</strong><button className="icon-button" aria-label="Remove repository context" disabled={chatPending} onClick={() => setContextRepo(null)}><X size={13} /></button></div><span>{context.repo}</span><div className="context-actions">{!catalog && !context.referenceBadge && context.state !== "unmanaged" && (context.state === "available" ? ["install"] as const : [context.state === "enabled" ? "disable" : "enable"] as const).map(action => <button key={action} className="button" disabled={context.backend === "—"} onClick={() => { const result = act(context, action); setMessages(previous => [...previous, { role: "assistant", text: `${result} Simulated action; your machine is unchanged.` }]); }}>{actionLabels[action]} {context.name}</button>)}<span className={`status ${context.state}`}><span className="status-dot" />{context.referenceBadge ? "Not installable" : stateLabels[context.state]}</span></div></div>}
         {catalog && !pairingToken ? <form className="chat-composer chat-pairing" onSubmit={event => {
           event.preventDefault();
           const value = pairingDraft.trim();
           if (!/^[\w-]{43}$/.test(value)) { setChatError("Paste the 43-character token from DOTCODE_HOME/assistant-token."); return; }
           setPairingToken(value); setPairingDraft(""); setChatError(""); requestAnimationFrame(() => chatInput.current?.focus());
-        }}><label htmlFor="assistant-token">Pair this page</label><p id="assistant-token-help">Paste the token from <code>DOTCODE_HOME/assistant-token</code> (default <code>~/.dotcode</code>). It stays in this page until you reload.</p><div><input id="assistant-token" type="password" autoComplete="off" spellCheck={false} value={pairingDraft} onChange={event => setPairingDraft(event.target.value)} aria-describedby="assistant-token-help" /><button className="button" type="submit" disabled={!pairingDraft.trim()}>Pair</button></div></form> :
+          if (installCard) startInstall(installCard, value);
+        }}><label htmlFor="assistant-token">Pair this page</label><p id="assistant-token-help">Paste the token from <code>DOTCODE_HOME/assistant-token</code> (default <code>~/.dotcode</code>). It stays in this page until you reload.</p><div><input ref={pairingInput} id="assistant-token" type="password" autoComplete="off" spellCheck={false} value={pairingDraft} onChange={event => setPairingDraft(event.target.value)} aria-describedby="assistant-token-help" /><button className="button" type="submit" disabled={!pairingDraft.trim()}>Pair</button></div></form> :
         <form className="chat-composer" onSubmit={submitChat}><label className="sr-only" htmlFor="chat-input">Message assistant</label><textarea ref={chatInput} id="chat-input" value={draft} onChange={event => setDraft(event.target.value)} placeholder="Ask about your tools…" rows={3} maxLength={4000} readOnly={chatPending} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><div><span>Enter to send · Shift + Enter for a new line</span><button className="send-button" type="submit" disabled={!draft.trim() || chatPending} aria-label="Send message"><ArrowRight size={16} /></button></div></form>}
       </aside>
     </div>

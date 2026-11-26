@@ -16,7 +16,7 @@ import { attachMcp } from '../backend/mcp.mjs';
 
 const githubUrl = 'https://github.com/example/tool';
 
-async function serve(t, createCodex, host = '127.0.0.1') {
+async function serve(t, createCodex, host = '127.0.0.1', installerOptions = {}) {
   const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-chat-'));
   const app = express();
   attachApi(app, { directory, createCodex, installerOptions: { env: {}, fetchRemote: async url => {
@@ -24,7 +24,7 @@ async function serve(t, createCodex, host = '127.0.0.1') {
     if (pathname === '/repos/example/tool') return Response.json({ full_name: 'example/tool' });
     if (pathname === '/repos/example/tool/readme') return Response.json({ content: Buffer.from('# Tool\nChecks YAML syntax.').toString('base64') });
     return new Response('{}', { status: 404 });
-  } } });
+  }, ...installerOptions } });
   const server = app.listen(0, host);
   t.after(async () => {
     await new Promise(resolve => server.close(resolve));
@@ -40,7 +40,7 @@ async function serve(t, createCodex, host = '127.0.0.1') {
   const post = async (body, headers = {}) => fetch(`${origin}/api/ai/chat`, {
     method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${await assistantToken()}`, ...headers }, body: JSON.stringify(body),
   });
-  return { origin, post, tokenFile, assistantToken, externalToken };
+  return { origin, post, directory, tokenFile, assistantToken, externalToken };
 }
 
 test('chat requires the owner-only pairing token before starting Codex', async t => {
@@ -79,6 +79,90 @@ test('chat requires the owner-only pairing token before starting Codex', async t
   assert.equal((await mcp(paired)).status, 401);
   const { result } = await (await mcp(await externalToken())).json();
   assert.ok(result.tools.some(tool => tool.name === 'list_unmanaged'));
+});
+
+test('Card Install hands fresh server-owned context to Codex and only proposes a skill Plan', async t => {
+  let clock = Date.parse('2026-11-21T12:00:00Z');
+  const card = { id: 'example--tool', name: 'Tool', repo: 'example/tool', githubUrl, category: 'Skills', categoryLabel: 'Skills',
+    description: 'A test skill', primaryLanguage: 'Markdown', tags: [], defaultInstallCommand: '', customCommand: '', customNotes: 'A saved note',
+    detection: { checkedAt: new Date(clock).toISOString(), commit: 'a'.repeat(40), badges: ['Skill'], skillPaths: ['old-tool'] } };
+  const latest = 'b'.repeat(40);
+  const fetches = [];
+  let proposal, staleBearer, approval;
+  const rpc = async (url, token, method, params) => (await fetch(url, { method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  })).json();
+  const { directory, origin, post, externalToken, assistantToken } = await serve(t, ({ config, env }) => ({ startThread: () => ({ run: async input => {
+    const prompt = JSON.parse(input);
+    assert.deepEqual(prompt.card, await savedCard());
+    assert.equal(prompt.card.id, card.id);
+    assert.ok(config.developer_instructions.includes('plan'));
+    assert.match(config.developer_instructions, /without.*question|go straight/i);
+    if (!fetches.length) {
+      assert.deepEqual(prompt.card, card);
+      return { finalResponse: 'Choose a skill.' };
+    }
+    assert.equal(prompt.card.detection.commit, latest);
+    assert.deepEqual(prompt.card.detection.skillPaths, ['skills/tool']);
+    const { url, enabled_tools } = config.mcp_servers.dotcode;
+    const token = staleBearer = env.DOTCODE_MCP_TOKEN;
+    const call = async (name, args) => rpc(url, token, 'tools/call', { name, arguments: args });
+    const { result: { tools } } = await rpc(url, token, 'tools/list');
+    assert.deepEqual(tools.map(tool => tool.name), enabled_tools);
+    assert.equal(tools.find(tool => tool.name === 'plan').annotations.readOnlyHint, false);
+    for (const name of ['approve', 'execute', 'reject']) assert.equal((await call(name, {})).error.code, -32602);
+    for (const [url, subpath] of [['https://github.com/example/other', 'skills/tool'], [githubUrl, 'old-tool']]) {
+      const result = await call('plan', { action: 'install', githubUrl: url, subpath });
+      assert.equal(result.result.isError, true);
+      assert.equal(JSON.parse(result.result.content[0].text).code, 'INVALID_INPUT');
+    }
+    const plan = await call('plan', { action: 'install', githubUrl, subpath: 'skills/tool' });
+    assert.ok(!plan.result.isError, plan.result.content[0].text);
+    proposal = JSON.parse(plan.result.content[0].text);
+    assert.equal(proposal.status, 'pending');
+    assert.equal(proposal.version, latest);
+    assert.match(proposal.link, /#plan-/);
+    approval = await send('/api/installer/approve', { planId: proposal.planId }, token);
+    const status = await call('plan_status', { planId: proposal.planId });
+    assert.deepEqual(JSON.parse(status.result.content[0].text), proposal);
+    return { finalResponse: 'Plan ready for approval.' };
+  } }) }), '127.0.0.1', {
+    home: '/unused', now: () => clock,
+    run: async program => { assert.equal(program, 'gh', 'Planning must not check out or install the skill'); return { stdout: '' }; },
+    fetchRemote: async url => {
+      fetches.push(url);
+      if (url.includes('/commits/')) return Response.json({ sha: latest });
+      if (url.includes('/git/trees/')) return Response.json({ tree: [{ path: 'skills/tool/SKILL.md', type: 'blob', mode: '100644' }] });
+      if (url.endsWith('/releases/latest')) return new Response(null, { status: 404 });
+      return Response.json({ full_name: card.repo });
+    },
+  });
+  const send = (route, body, token) => fetch(origin + route, { method: 'POST', headers: {
+    'content-type': 'application/json', ...(token && { authorization: `Bearer ${token}` }),
+  }, body: JSON.stringify(body) });
+  const savedCard = async () => (await (await fetch(origin + '/api/catalog')).json()).items[0];
+  await writeFile(path.join(directory, 'catalog.json'), JSON.stringify([card]));
+  const install = () => post({ message: 'Prepare an install Plan.', installCardId: card.id, card: { ...card, customNotes: 'Not server owned' } });
+  assert.equal((await post({ message: 'Prepare an install Plan.', installCardId: 'not-in-library' })).status, 404);
+  assert.equal((await install()).status, 200);
+  assert.deepEqual(fetches, []);
+  clock += 24 * 60 * 60 * 1000 + 1;
+  const response = await install();
+  assert.equal(response.status, 200);
+  assert.equal(approval.status, 401);
+  assert.equal((await response.json()).plans[0].id, proposal.planId);
+  assert.equal((await savedCard()).detection.commit, latest);
+  assert.equal(fetches.filter(url => url.includes('/commits/')).length, 1);
+  assert.equal((await send('/api/installer/execute', { planId: proposal.planId })).status, 400);
+  assert.equal((await fetch(origin + '/mcp', { method: 'POST', headers: { authorization: `Bearer ${staleBearer}` } })).status, 401);
+  assert.equal((await (await fetch(origin + '/api/installer/plans')).json()).plans[0].id, proposal.planId);
+  assert.equal((await send('/api/installer/reject', { planId: proposal.planId }, await assistantToken())).status, 200);
+  const status = await rpc(origin + '/mcp', await externalToken(), 'tools/call', { name: 'plan_status', arguments: { planId: proposal.planId } });
+  assert.equal(JSON.parse(status.result.content[0].text).status, 'rejected');
+  assert.equal((await send('/api/installer/approve', { planId: proposal.planId }, await assistantToken())).status, 400);
+  assert.deepEqual(await (await fetch(origin + '/api/installer')).json(), { receipts: [] });
+  await assert.rejects(stat(path.join(directory, 'store')), { code: 'ENOENT' });
 });
 
 test('chat refuses a pairing token that other local users can read', async t => {

@@ -229,3 +229,4 @@ aside.assistant { position: sticky; top: 12px; display: flex; flex-direction: co
   .discovery > footer { padding: 12px 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+.plan-actions { display: flex; gap: 8px; margin-top: 8px; }
