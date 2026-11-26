@@ -45,12 +45,14 @@ Credentials stay on the server and are sent only to `api.github.com`.
 
 Select **Ask assistant** on a Card, or open **Assistant** and include a GitHub
 repository name or URL in your question. The integrated Codex SDK reads repository
-metadata and READMEs through DotCode's read-only MCP tools. It cannot run shell
-commands, edit files, or install Components.
+metadata and READMEs through DotCode's read-only MCP tools. Codex runs in a
+read-only sandbox in an empty temporary directory and never asks for approval, so
+its tools cannot edit files, reach the network, or install Components.
 
 Sign in with `codex login`, or set `OPENAI_API_KEY` in the server environment.
-DotCode uses the bundled Codex binary and your login credentials, but ignores
-personal Codex configuration, hooks, plugins, and MCP servers. Chat history stays
+DotCode uses the bundled Codex binary and your login credentials, and ignores
+`config.toml`, rules, hooks, plugins, memories, and your MCP servers. Codex still
+reads `$CODEX_HOME/AGENTS.md` and your personal skills. Chat history stays
 in the open page; each request sends recent turns to Codex, and reloading clears
 it.
 

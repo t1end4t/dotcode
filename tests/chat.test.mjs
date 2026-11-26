@@ -32,8 +32,10 @@ async function serve(t, createCodex) {
 
 test('chat answers using the same read-only MCP tools as DotCode, with server-owned credentials', async t => {
   const post = await serve(t, ({ config, env }) => ({ startThread: options => ({ run: async prompt => {
+    // Codex 0.172.0 always exposes `exec` and `apply_patch`, so the sandbox is the write guarantee.
     assert.equal(options.sandboxMode, 'read-only');
     assert.equal(options.approvalPolicy, 'never');
+    assert.equal(options.networkAccessEnabled, false);
     assert.equal(options.webSearchMode, 'disabled');
     assert.equal(config.features.shell_tool, false);
     assert.equal(config.features.hooks, false);
