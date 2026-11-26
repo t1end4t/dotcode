@@ -62,14 +62,17 @@ and sends it only with chat requests; reload to forget it. DotCode gives Codex a
 separate per-start MCP bearer that can call only the tools listed above. To rotate
 the pairing token, delete the file and restart DotCode.
 
-Set `OPENAI_API_KEY` in the server environment, or sign in with `codex login`
-using Codex’s default file-backed credential store. DotCode’s bundled Codex reads
+Set `CODEX_API_KEY` in the server environment, or sign in with `codex login`
+using Codex’s default file-backed credential store. Codex ignores
+`OPENAI_API_KEY` and `OPENAI_BASE_URL`, so DotCode does not forward them. DotCode’s bundled Codex reads
 `auth.json` from the server’s `CODEX_HOME` (default `~/.codex`). It ignores
 `config.toml`, including any setting that changes the credential store, so a
 keyring-only login is not sufficient. It also ignores rules, hooks, plugins,
 memories, and your MCP servers. Codex still reads `$CODEX_HOME/AGENTS.md` and
 may read personal skills. Chat history stays in the open page; each request
 sends recent turns to Codex, and reloading clears it.
+While the Assistant runs the Detector, Install and other installer actions report
+that another task is running; retry when the answer arrives.
 
 ## Your Workspace
 

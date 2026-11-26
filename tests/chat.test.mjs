@@ -157,7 +157,7 @@ test('Codex bypasses provider proxies for authenticated local MCP', { timeout: 2
   t.after(() => rm(home, { recursive: true, force: true }));
   // Isolate Codex from user credentials, config, and proxy settings. The provider is a local fixture.
   t.mock.property(process, 'env', {
-    PATH: process.env.PATH, HOME: home, CODEX_HOME: home, OPENAI_API_KEY: 'test-provider-key',
+    PATH: process.env.PATH, HOME: home, CODEX_HOME: home, CODEX_API_KEY: 'test-provider-key',
     HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl,
   });
   const token = 'local-mcp-fixture-token-not-a-secret';
@@ -181,7 +181,7 @@ test('Codex bypasses provider proxies for authenticated local MCP', { timeout: 2
       message: 'Hello', history: [], mcpUrl: `http://127.0.0.1:${mcp.address().port}/mcp`, token, tools: [],
       createCodex: options => new Codex({ ...options, config: {
         ...options.config, model: 'gpt-5.4', model_provider: 'fixture', model_providers: { fixture: {
-          name: 'Fixture', base_url: providerUrl, env_key: 'OPENAI_API_KEY', wire_api: 'responses',
+          name: 'Fixture', base_url: providerUrl, env_key: 'CODEX_API_KEY', wire_api: 'responses',
           request_max_retries: 0, stream_max_retries: 0,
         } },
       } }),
@@ -196,6 +196,29 @@ test('Codex bypasses provider proxies for authenticated local MCP', { timeout: 2
       assert.doesNotMatch(JSON.stringify(tools.map(({ name, type }) => name ?? type)), /"(?:apply_patch|shell|local_shell|shell_command|exec|exec_command|write_stdin|web_search(?:_preview)?|(?:get|create|update)_goal)"/);
     }
   }
+});
+
+test('bundled Codex authenticates the default provider with CODEX_API_KEY', { timeout: 30000 }, async t => {
+  const auth = [];
+  // Local fixture provider and proxy: every request, direct or proxied, ends here.
+  const provider = createServer((req, res) => { auth.push(req.headers.authorization); res.writeHead(400).end(); });
+  provider.on('connect', (req, socket) => { auth.push(`CONNECT ${req.url}`); socket.destroy(); });
+  provider.listen(0, '127.0.0.1');
+  t.after(() => new Promise(resolve => provider.close(resolve)));
+  await once(provider, 'listening');
+  const local = `http://127.0.0.1:${provider.address().port}`;
+  const home = await mkdtemp(path.join(tmpdir(), 'dotcode-codex-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  t.mock.property(process, 'env', {
+    PATH: process.env.PATH, HOME: home, CODEX_HOME: home, CODEX_API_KEY: 'fixture-codex-key', OPENAI_API_KEY: 'fixture-openai-key',
+    HTTP_PROXY: local, HTTPS_PROXY: local,
+  });
+  await assert.rejects(answerChat({
+    message: 'Hello', history: [], mcpUrl: `${local}/mcp`, token: 'unused', tools: [],
+    createCodex: options => new Codex({ ...options, config: { ...options.config, openai_base_url: `${local}/v1`, mcp_servers: {} } }),
+  }));
+  assert.ok(auth.length, 'Codex should call the fixture provider');
+  assert.deepEqual([...new Set(auth)], ['Bearer fixture-codex-key']);
 });
 
 test('the bundled Linux read-only sandbox blocks writes and network access', { skip: process.platform !== 'linux' }, async t => {

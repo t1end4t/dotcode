@@ -262,7 +262,7 @@ export function attachApi(app, {
       const auth = /\b(?:401|unauthorized|authentication|not logged in|api key)\b/i.test(error.message);
       if (!res.destroyed) res.status(signal.aborted ? 504 : 502).json({ error: signal.aborted
         ? 'Codex took too long to answer. Try again.' : auth
-          ? 'Codex sign-in failed. Check OPENAI_API_KEY or sign in with the default file-backed Codex credential store.'
+          ? 'Codex sign-in failed. Set CODEX_API_KEY or sign in with the default file-backed Codex credential store.'
           : 'Could not reach Codex or DotCode MCP. Check the connection and try again.' });
     } finally { chatRunning = false; }
   });

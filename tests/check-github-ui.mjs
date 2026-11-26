@@ -165,6 +165,7 @@ try {
     node.form.requestSubmit(); return true;
   `);
   assert.equal(evaluate('return !!document.querySelector("#chat-input");'), false, 'Chat must stay locked until the page is paired');
+  assert.match(evaluate('return document.querySelector("#assistant-token-help").textContent;'), /^Paste the token from DOTCODE_HOME\/assistant-token /, 'The pairing hint must respect DOTCODE_HOME');
   evaluate(`
     const node = document.querySelector('#assistant-token');
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(node, ${JSON.stringify('p'.repeat(43))});

@@ -11,7 +11,8 @@ export async function answerChat({ message, githubUrl, history, mcpUrl, token, t
   const workingDirectory = await mkdtemp(path.join(tmpdir(), 'dotcode-chat-'));
   try {
     // Do not inherit GitHub tokens, hook environment variables, or other app secrets.
-    const env = Object.fromEntries(['PATH', 'HOME', 'CODEX_HOME', 'OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS',
+    // Codex exec authenticates with CODEX_API_KEY and ignores OPENAI_API_KEY and OPENAI_BASE_URL.
+    const env = Object.fromEntries(['PATH', 'HOME', 'CODEX_HOME', 'CODEX_API_KEY', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS',
       'HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'NO_PROXY', 'no_proxy', 'ALL_PROXY', 'all_proxy',
       'SSL_CERT_FILE', 'SSL_CERT_DIR', 'CODEX_CA_CERTIFICATE']
       .filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]));
