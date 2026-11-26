@@ -5,13 +5,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import express from 'express';
-import { createInstaller } from './installer.mjs';
-import { githubRepo } from './github.mjs';
+import { createInstaller, InstallerError } from './installer.mjs';
+import { githubKey as catalogKey, githubRepo } from './github.mjs';
 import { attachMcp, mcpToken } from './mcp.mjs';
 
-const textFields = ['name', 'githubUrl', 'action', 'location', 'method', 'configurationNotes', 'version', 'installCommand', 'updateCommand', 'uninstallCommand', 'verificationCommand'];
+const textFields = ['name', 'githubUrl', 'action', 'location', 'method', 'configurationNotes', 'version'];
 const catalogFields = ['id', 'name', 'repo', 'githubUrl', 'category', 'categoryLabel', 'description', 'primaryLanguage', 'defaultInstallCommand', 'customNotes', 'customCommand'];
-const catalogKey = url => url.replace(/\/$/, '').replace(/\.git$/, '').toLowerCase();
 function validateCatalog(items) {
   if (!Array.isArray(items) || items.length > 200 || !items.every(item => item &&
       catalogFields.every(field => typeof item[field] === 'string' && item[field].length <= 16000) && item.id.trim() && item.name.trim() &&
@@ -54,22 +53,23 @@ async function discoverInstallations(directory, installations) {
   let catalog;
   try { catalog = validateCatalog(JSON.parse(await readFile(path.join(directory, 'catalog.json'), 'utf8'))); }
   catch { return installations; }
-  const observed = new Map(installations.map(item => [item.githubUrl.toLowerCase().replace(/\/$/, ''), item]));
-  const workspace = await realpath(path.join(directory, 'workspace'));
+  const observed = [...installations];
+  const workspace = await realpath(path.join(directory, 'workspace')).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+  if (!workspace || workspace === directory || !contains(directory, workspace)) return installations;
   for (const item of catalog) {
     if (!/^[\w-]+$/.test(item.id)) continue;
     const location = path.join(workspace, 'apps', item.id, 'profile');
-    const key = item.githubUrl.toLowerCase().replace(/\/$/, '');
-    const previous = observed.get(key);
-    const owned = previous && (previous.location === location ||
-      (/nix/i.test(previous.method) && contains(location, previous.location)));
+    const key = catalogKey(item.githubUrl);
+    const previousIndex = observed.findIndex(record => typeof record?.githubUrl === 'string' && catalogKey(record.githubUrl) === key &&
+      typeof record.location === 'string' && (record.location === location || (/nix/i.test(record.method) && contains(location, record.location))));
+    const previous = observed[previousIndex];
     let manifest;
     try {
       if (!contains(workspace, await realpath(path.dirname(location)))) continue;
       manifest = JSON.parse(await readFile(path.join(location, 'manifest.json'), 'utf8'));
       if (manifest.version !== 3 || !manifest.elements || typeof manifest.elements !== 'object' || Array.isArray(manifest.elements)) continue;
     } catch (error) {
-      if (error.code === 'ENOENT' && owned) observed.set(key, { ...previous, installed: false });
+      if (error.code === 'ENOENT' && previous) observed[previousIndex] = { ...previous, installed: false };
       continue;
     }
     const storePaths = Object.values(manifest.elements).filter(entry => entry?.active === true && Array.isArray(entry.storePaths))
@@ -91,24 +91,21 @@ async function discoverInstallations(directory, installations) {
       } catch {}
     }
     if (!root) {
-      if (owned) observed.set(key, { ...previous, installed: false });
+      if (previous) observed[previousIndex] = { ...previous, installed: false };
       continue;
     }
-    const lifecycle = {};
-    for (const name of ['install', 'update', 'uninstall', 'verify']) {
-      const script = path.join(path.dirname(location), `${name}.sh`);
-      if ((await lstat(script).catch(() => null))?.isFile()) lifecycle[name === 'verify' ? 'verificationCommand' : `${name}Command`] = `bash '${script.replaceAll("'", "'\\''")}'`;
-    }
-    observed.set(key, {
-      ...Object.fromEntries(textFields.map(field => [field, ''])), ...previous, ...lifecycle,
+    const discovered = {
+      ...Object.fromEntries(textFields.map(field => [field, ''])), ...previous,
       name: item.name, githubUrl: item.githubUrl.replace(/\/$/, ''), installed: true,
       location, method: 'Nix profile (disk discovery)',
       version: path.basename(root).match(/^[^-]+-.+-(\d[^/]*)$/)?.[1] ?? '',
-      configurationNotes: `Active profile manifest and executable checked on disk. Not a runtime health check. Lifecycle record: ${path.join(path.dirname(location), 'README.md')}`,
+      configurationNotes: `Active profile manifest and executable checked on disk. Not a runtime health check. Unmanaged: no Receipt, display only.`,
       verifiedAt: new Date().toISOString(),
-    });
+    };
+    if (previous) observed[previousIndex] = discovered;
+    else observed.push(discovered);
   }
-  return [...observed.values()];
+  return observed;
 }
 function isLocalRequest(req) {
   const ip = req.socket.remoteAddress;
@@ -135,7 +132,6 @@ export function attachApi(app, {
     }
   };
   checkDirectory(directory);
-  const installer = createInstaller({ ...installerOptions, directory });
   let busy = false;
   let initializingCatalog = false;
   const statePath = path.join(directory, 'inventory.json');
@@ -155,8 +151,8 @@ export function attachApi(app, {
     checkDirectory(await realpath(workspace));
   };
   const load = async () => {
-    await prepare();
     try {
+      checkDirectory(await realpath(directory));
       const state = JSON.parse(await readFile(statePath, 'utf8'));
       if (!state || !Array.isArray(state.installations) || !Array.isArray(state.runs)) throw new Error('Invalid inventory file. Restore it before continuing.');
       return { ...state, categories: state.categories ?? [] };
@@ -165,6 +161,13 @@ export function attachApi(app, {
       throw error;
     }
   };
+  const loadInstallations = async () => {
+    const state = await load();
+    // Old lifecycle scripts are never offered: installs without a Receipt are display-only.
+    const installations = (await discoverInstallations(directory, state.installations)).map(({ installCommand, updateCommand, uninstallCommand, verificationCommand, ...item }) => item);
+    return { ...state, installations };
+  };
+  const installer = createInstaller({ ...installerOptions, directory, loadInstallations: async () => (await loadInstallations()).installations });
   const save = async (state, file = statePath) => {
     await prepare();
     const temporary = `${file}.${randomUUID()}.tmp`;
@@ -201,6 +204,9 @@ export function attachApi(app, {
     { name: 'list_components', description: 'List installed Components from their Receipts with current Activation status.',
       inputSchema: { type: 'object', properties: {} },
       call: whenIdle(() => installer.snapshot()) },
+    { name: 'list_unmanaged', description: 'List Unmanaged CLIs, skills, subagents, plugins, user units and older apps with name and port conflict warnings. Display only.',
+      inputSchema: { type: 'object', properties: {} },
+      call: whenIdle(() => installer.unmanaged()) },
   ] });
   app.use('/api', (req, res, next) => {
     if (!isLocalRequest(req)) return res.status(403).json({ error: 'Local, same-origin requests only.' });
@@ -231,6 +237,10 @@ export function attachApi(app, {
   });
   app.get('/api/installer', async (_req, res) => {
     try { res.json(await installer.snapshot()); }
+    catch (error) { installerFailure(res, error); }
+  });
+  app.get('/api/installer/unmanaged', async (_req, res) => {
+    try { res.json(await installer.unmanaged()); }
     catch (error) { installerFailure(res, error); }
   });
   app.post('/api/installer/detect', async (req, res) => {
@@ -271,10 +281,9 @@ export function attachApi(app, {
 
   app.get('/api/inventory', async (_req, res) => {
     try {
-      const state = await load();
-      res.json({ ...state, installations: await discoverInstallations(directory, state.installations) });
-    }
-    catch (error) { res.status(500).json({ error: error.message }); }
+      const state = await loadInstallations();
+      res.json({ ...state, installations: await installer.inventory(state.installations) });
+    } catch (error) { res.status(500).json({ error: error.message }); }
   });
 
   app.get('/api/updates', async (req, res) => {
@@ -287,11 +296,11 @@ export function attachApi(app, {
       let catalog = [];
       try { catalog = validateCatalog(JSON.parse(await readFile(catalogPath, 'utf8'))); }
       catch (error) { if (error.code !== 'ENOENT') throw error; }
-      const key = url => url.replace(/\/$/, '').replace(/\.git$/, '').toLowerCase();
-      if (![...catalog, ...state.installations].some(item => key(item.githubUrl) === key(githubUrl))) {
+      const key = catalogKey(githubUrl);
+      if (![...catalog, ...state.installations].some(item => typeof item?.githubUrl === 'string' && catalogKey(item.githubUrl) === key)) {
         return res.status(404).json({ error: 'Repository is not in the catalog or inventory.' });
       }
-      const repo = new URL(key(githubUrl)).pathname.slice(1);
+      const repo = new URL(key).pathname.slice(1);
       const response = await fetchRelease(`https://api.github.com/repos/${repo}/releases/latest`, {
         headers: { accept: 'application/vnd.github+json', 'user-agent': 'DotCode' },
         redirect: 'error', signal: AbortSignal.timeout(10000),

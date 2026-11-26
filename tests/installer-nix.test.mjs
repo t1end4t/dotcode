@@ -52,7 +52,8 @@ async function fixture(t, options = {}) {
         ...(options.flake === false ? [] : [{ path: 'flake.nix', type: 'blob', mode: '100644' }]),
         ...(options.skill ? [{ path: 'SKILL.md', type: 'blob', mode: '100644' }] : []),
       ] }));
-  const installer = createInstaller({ directory, home, run, fetchRemote, searchPath: path.join(home, '.local/bin'), ...options });
+  const { pathEntries = () => [path.join(home, '.local/bin')], ...installerOptions } = options;
+  const installer = createInstaller({ directory, home, run, fetchRemote, searchPath: pathEntries(home).join(path.delimiter), ...installerOptions });
   const install = async (type = 'flake') => {
     const { candidates } = await installer.detect({ githubUrl });
     const recipe = candidates.find(candidate => candidate.recipe.source.type === type).recipe;
@@ -121,6 +122,31 @@ test('install pins a flake commit, roots its output in Store and creates a worki
   assert.ok(build.includes(`github:example/hello/${commit}#^out`));
   assert.equal(build[build.indexOf('--out-link') + 1], receipt.storePath);
   assert.equal(JSON.parse(await readFile(path.join(directory, 'receipts.json'), 'utf8')).receipts[0].version, commit);
+});
+
+test('duplicate PATH executables are reported and a CLI ahead of the wrapper blocks Plan and Execute', async t => {
+  const { home, installer, calls } = await fixture(t, { pathEntries: home => [path.join(home, 'first'), path.join(home, '.dotcode/bin'), path.join(home, 'second')] });
+  const first = path.join(home, 'first');
+  const second = path.join(home, 'second');
+  const { candidates: [{ recipe }] } = await installer.detect({ githubUrl });
+  const request = { action: 'install', githubUrl, recipe };
+  await mkdir(first, { recursive: true });
+  await mkdir(second);
+  const before = path.join(first, 'hello');
+  const after = path.join(second, 'hello');
+  await writeFile(after, '#!/bin/sh\n# second\n', { mode: 0o755 });
+  const plan = await installer.plan(request);
+  await writeFile(before, '#!/bin/sh\n# first\n', { mode: 0o755 });
+
+  const { items, warnings } = await installer.unmanaged();
+  assert.deepEqual(items.map(item => item.path), [before, after]);
+  assert.ok(warnings.some(warning => warning.includes('hello') && warning.includes(before) && warning.includes(after)));
+  for (const action of [() => installer.plan(request), () => installer.execute(plan.id)]) {
+    await assert.rejects(action, error => error.code === 'CONFLICT' && error.message.includes(before) && /Unmanaged.*PATH.*blocks/.test(error.message));
+  }
+  assert.equal(calls.some(([, args]) => args[0] === 'build'), false);
+  assert.deepEqual((await installer.snapshot()).receipts, []);
+  assert.equal(await readFile(before, 'utf8'), '#!/bin/sh\n# first\n');
 });
 
 test('CLI enable and disable only change the wrapper; uninstall removes the out-link and Receipt', async t => {

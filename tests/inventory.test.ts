@@ -13,9 +13,7 @@ test("inventory receipts replace seed installation flags without mutating the ca
   const receipt: Installation = {
     name: seed.name, githubUrl: `${seed.githubUrl.toUpperCase()}.git/`,
     installed: true, location: "/tmp/dotcode-test/tool", method: "test",
-    configurationNotes: "", version: "1.2.3", installCommand: "", updateCommand: "",
-    uninstallCommand: "", verificationCommand: "test -x tool",
-    verifiedAt: "2026-10-19T00:00:00Z",
+    configurationNotes: "", version: "1.2.3", verifiedAt: "2026-10-19T00:00:00Z",
   };
   const merged = mergeInventory([seed], [receipt], [{ githubUrl: seed.githubUrl, category: "Utilities" }]);
   assert.equal(merged.length, 1);
@@ -28,9 +26,7 @@ test("inventory receipts replace seed installation flags without mutating the ca
 
 const receipt: Installation = {
   name: INITIAL_ITEMS[0].name, githubUrl: INITIAL_ITEMS[0].githubUrl, installed: true,
-  location: "/tmp/dotcode-test/tool", method: "test", configurationNotes: "", version: "1.2.3",
-  installCommand: "", updateCommand: "", uninstallCommand: "",
-  verificationCommand: "test -x tool", verifiedAt: "2026-10-19T00:00:00Z",
+  location: "/tmp/dotcode-test/tool", method: "test", configurationNotes: "", version: "1.2.3", verifiedAt: "2026-10-19T00:00:00Z",
 };
 
 test("removed cards stay removed despite retained install or uninstall receipts", () => {

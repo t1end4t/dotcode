@@ -82,6 +82,10 @@ evaluate(`
     if (url.pathname === '/api/inventory') {
       return Response.json({ installations: [{ githubUrl: legacy.githubUrl, installed: true, version: '1.2.3', method: 'legacy', location: '/fixture/review' }] });
     }
+    if (url.pathname === '/api/installer/unmanaged') {
+      return Response.json({ items: [{ kind: 'service', name: 'dotcode-9router.service', path: '/fixture/systemd/user/dotcode-9router.service', ports: [20128] }],
+        warnings: ['Port 20128 is declared by dotcode-9router.service, other-9router.service.'] });
+    }
     return window.__searchOriginalFetch(input, options);
   };
   return true;
@@ -148,9 +152,18 @@ try {
   }
   click('[aria-label="Close assistant"]');
   const legacyCard = cardSelector('review-legacy');
-  command('wait', '--selector', `${legacyCard} .status.enabled`);
-  assert.match(evaluate(`return document.querySelector('${legacyCard}').textContent;`), /Installed · Enabled.*1\.2\.3.*Uninstall/s);
-  assert.doesNotMatch(evaluate(`return document.querySelector('${legacyCard}').textContent;`), /Not installable/);
+  command('wait', '--selector', `${legacyCard} .status.unmanaged`);
+  assert.match(evaluate(`return document.querySelector('${legacyCard}').textContent;`), /Installed · Unmanaged.*1\.2\.3/s);
+  assert.deepEqual(evaluate(`return Array.from(document.querySelectorAll('${legacyCard} footer button'), button => button.textContent.trim());`), ['Ask assistant']);
+  click(`${legacyCard} .ask-ai`);
+  assert.equal(evaluate('return document.querySelector(".chat-context .context-actions").textContent;'), 'Installed · Unmanaged');
+  click('[aria-label="Close assistant"]');
+  command('wait', '--selector', '.unmanaged-inventory .unmanaged-warnings');
+  assert.match(evaluate('return document.querySelector(".unmanaged-warnings").textContent;'), /Port 20128 is declared by/);
+  click('.unmanaged-inventory summary');
+  assert.match(evaluate('return document.querySelector(".unmanaged-inventory details[open]").textContent;'), /dotcode-9router\.service.*20128/s);
+  evaluate('document.querySelector(".unmanaged-inventory").scrollIntoView({ block: "end" }); return true;');
+  capture('unmanaged', ['read-only legacy card', 'service and declared port', 'port conflict warning']);
   assert.deepEqual(evaluate('return Array.from(document.querySelectorAll(".kind-filter option"), option => option.value);'),
     ['all', 'cli', 'desktop-app', 'skill', 'mcp']);
   const reads = evaluate('return window.__catalogReads;');
