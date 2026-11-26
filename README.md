@@ -41,6 +41,11 @@ GitHub requests use `GITHUB_TOKEN`, or `gh auth token` when available. Without a
 token, search still works with lower anonymous limits and shows a warning.
 Credentials stay on the server and are sent only to `api.github.com`.
 
+The **Unmanaged** section shows local CLIs, user units, skills, subagents, plugins,
+and older app installs without a Receipt. The scan is read-only and flags name
+and port conflicts. If an existing install blocks a new one, resolve it yourself;
+DotCode does not remove it or run its old lifecycle scripts.
+
 ### Ask the Assistant
 
 Select **Ask assistant** on a Card, or open **Assistant** and include a GitHub
@@ -100,6 +105,7 @@ DotCode serves a read-only MCP endpoint at `http://127.0.0.1:3000/mcp`
 | `repo_info` | Repository metadata, README, and the Library Card if one exists. |
 | `detect` | Ranked candidate Recipes from the Detector. |
 | `list_components` | Installed Components from Receipts, with Activation status. |
+| `list_unmanaged` | The read-only Unmanaged inventory and its conflict warnings. |
 
 No tool adds Cards, writes Receipts, or installs anything. `search` and `detect`
 may evaluate a repository's flake, which can fetch its source into the Nix store.

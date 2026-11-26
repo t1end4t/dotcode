@@ -11,8 +11,14 @@ export async function readApiJson(response: Response) {
   return data;
 }
 
+type UnmanagedInventory = {
+  items: { kind: string; name: string; path: string; agent?: string; ports?: number[] }[];
+  warnings: string[];
+};
+
 export function useCatalog() {
   const [items, setItems] = useState<ManageableItem[]>([]);
+  const [unmanaged, setUnmanaged] = useState<UnmanagedInventory | { error: string } | null>(null);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [inventoryError, setInventoryError] = useState("");
   const releaseChecks = useRef(new Map<string, ReleaseCheck>());
@@ -31,6 +37,9 @@ export function useCatalog() {
   };
 
   const refreshInventory = async () => {
+    const scan = fetch("/api/installer/unmanaged").then(readApiJson).then(setUnmanaged, error => {
+      setUnmanaged({ error: error instanceof Error ? error.message : "Scan unavailable." });
+    });
     try {
       const [data, installer] = await Promise.all([
         fetch("/api/inventory").then(readApiJson),
@@ -41,6 +50,7 @@ export function useCatalog() {
     } catch (error) {
       setInventoryError(error instanceof Error ? error.message : "Inventory unavailable.");
     }
+    await scan;
   };
 
   const refreshCatalog = async () => {
@@ -64,5 +74,5 @@ export function useCatalog() {
 
   useEffect(() => { void refreshCatalog(); }, []);
 
-  return { items, inventoryError, catalogLoaded, refreshCatalog, checkUpdates };
+  return { items, unmanaged, inventoryError, catalogLoaded, refreshCatalog, checkUpdates };
 }

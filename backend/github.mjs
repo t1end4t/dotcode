@@ -35,9 +35,11 @@ const hasHook = (manifest, codex) => Object.values(manifest?.hooks ?? {}).some(g
   })));
 export const referenceBadge = badges => badges?.length === 1 && ['Hook', 'Library'].includes(badges[0]) ? badges[0] : undefined;
 
+export const githubKey = url => url.replace(/\/$/, '').replace(/\.git$/i, '').toLowerCase();
+
 export function githubRepo(value) {
   if (typeof value !== 'string' || !/^https:\/\/github\.com\/[a-z\d-]{1,39}\/[\w.-]{1,100}\/?$/i.test(value)) throw invalid();
-  const repo = value.slice('https://github.com/'.length).replace(/\/$/, '').replace(/\.git$/i, '').toLowerCase();
+  const repo = githubKey(value).slice('https://github.com/'.length);
   if (['.', '..', ''].includes(repo.split('/')[1])) throw invalid();
   return repo;
 }

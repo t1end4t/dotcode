@@ -119,3 +119,88 @@ test('update checks fetch only cataloged GitHub repositories', async () => {
   }
 });
 
+
+test('inventory shows old installs without a Receipt as display-only and never exposes lifecycle scripts', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dotcode-legacy-'));
+  const directory = path.join(root, 'data');
+  const app = express();
+  const home = path.join(root, 'home');
+  const commit = 'a'.repeat(40);
+  const commands = [];
+  const nixStore = path.join(root, 'nix-store');
+  attachApi(app, { directory, installerOptions: { home, searchPath: '', env: {}, nixRoots: [nixStore],
+    run: async (program, args, { cwd }) => {
+      if (program === 'gh') return { stdout: '' };
+      commands.push(program);
+      if (args.includes('checkout')) await writeFile(path.join(cwd, 'SKILL.md'), '# Tool');
+      return { stdout: args.includes('rev-parse') ? commit : '' };
+    },
+  } });
+  const server = app.listen(0, '127.0.0.1');
+  t.after(async () => {
+    await new Promise(resolve => server.close(resolve));
+    await rm(root, { recursive: true, force: true });
+  });
+  await new Promise(resolve => server.once('listening', resolve));
+  const legacy = { name: 'Tool', githubUrl: url, installed: true, version: '1.0', verificationCommand: 'bash verify.sh', uninstallCommand: 'bash uninstall.sh', installCommand: 'x', updateCommand: 'y' };
+  const inventory = path.join(directory, 'inventory.json');
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (action, body) => fetch(`${base}/api/installer/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const item = { id: 'tool', name: 'Tool', repo: 'example/tool', githubUrl: url, category: 'CLI', categoryLabel: 'CLI', description: '', tags: [], primaryLanguage: '', defaultInstallCommand: '', customNotes: '', customCommand: '',
+    detection: { commit, checkedAt: new Date().toISOString(), badges: ['Skill'], skillPaths: [''] },
+  };
+  assert.equal((await fetch(`${base}/api/catalog`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: [item] }) })).status, 200);
+  const scanItems = async () => {
+    const response = await fetch(`${base}/api/installer/unmanaged`);
+    assert.equal(response.status, 200);
+    return (await response.json()).items;
+  };
+  const nixPackage = path.join(nixStore, 'abc-tool-1.0');
+  const nixProfile = path.join(nixStore, 'abc-profile');
+  await mkdir(path.join(nixPackage, 'bin'), { recursive: true });
+  await writeFile(path.join(nixPackage, 'bin/tool'), '', { mode: 0o755 });
+  await mkdir(nixProfile);
+  await writeFile(path.join(nixProfile, 'manifest.json'), JSON.stringify({ version: 3, elements: { tool: { active: true, storePaths: [nixPackage] } } }));
+  await symlink(path.join(nixPackage, 'bin'), path.join(nixProfile, 'bin'));
+  const nixLocation = path.join(root, 'nix-profile');
+  await symlink(nixProfile, nixLocation);
+  await writeFile(inventory, JSON.stringify({ installations: [{ ...legacy, location: nixLocation }], runs: [] }));
+  const getInstallations = async () => (await (await fetch(`${base}/api/inventory`)).json()).installations;
+  assert.deepEqual(await scanItems(), []);
+  assert.deepEqual(await getInstallations(), []);
+
+  const request = { action: 'install', githubUrl: 'https://github.com/Example/Tool.GIT/' };
+  const before = await post('plan', request);
+  assert.equal(before.status, 200);
+  const { id: planId } = await before.json();
+  const saveInstallations = installations => writeFile(inventory, JSON.stringify({ installations, runs: [] }));
+  await saveInstallations([legacy]);
+  assert.deepEqual(await getInstallations(), [{ name: 'Tool', githubUrl: url, installed: true, version: '1.0' }]);
+  assert.deepEqual(await scanItems(), [{ kind: 'app', name: 'Tool', path: '' }]);
+  const profile = path.join(directory, 'workspace/apps/tool/profile');
+  await mkdir(path.dirname(profile), { recursive: true });
+  await symlink(nixProfile, profile);
+  assert.deepEqual(await scanItems(), [{ kind: 'app', name: 'Tool', path: '' }, { kind: 'app', name: 'Tool', path: profile }]);
+  assert.ok((await getInstallations()).some(item => item.location === profile));
+  for (const conflict of [await post('plan', request), await post('execute', { planId })]) {
+    assert.equal(conflict.status, 409);
+    const error = await conflict.json();
+    assert.equal(error.code, 'CONFLICT');
+    assert.match(error.error, /Unmanaged Tool blocks this install/);
+  }
+  assert.equal((await (await post('execute', { planId })).json()).code, 'INVALID_PLAN');
+  assert.deepEqual(commands, []);
+  assert.deepEqual((await (await fetch(`${base}/api/installer`)).json()).receipts, []);
+  assert.deepEqual(JSON.parse(await readFile(inventory, 'utf8')).installations, [legacy], 'the stored record is left alone');
+
+  await rm(profile);
+  const desktop = { ...legacy, kind: 'desktop-app', name: 'Old Tool desktop app', location: path.join(root, 'old-app') };
+  await saveInstallations([desktop]);
+  const skill = await post('plan', request);
+  assert.equal(skill.status, 200);
+  assert.equal((await post('execute', { planId: (await skill.json()).id })).status, 200);
+  const [receipt] = (await (await fetch(`${base}/api/installer`)).json()).receipts;
+  await saveInstallations([desktop, { ...legacy, kind: 'skill', location: receipt.activations.claude.path }]);
+  assert.deepEqual(await scanItems(), [{ kind: 'app', name: desktop.name, path: desktop.location }]);
+  assert.deepEqual((await getInstallations()).map(item => item.location), [desktop.location]);
+});

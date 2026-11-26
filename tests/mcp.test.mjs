@@ -25,7 +25,7 @@ async function serve(t, host = '127.0.0.1', files = {}) {
   const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-mcp-'));
   for (const [name, contents] of Object.entries(files)) await writeFile(path.join(directory, name), contents);
   const app = express();
-  attachApi(app, { directory, installerOptions: { env: {}, run: async () => ({ stdout: '{}' }), fetchRemote } });
+  attachApi(app, { directory, installerOptions: { env: {}, home: directory + '-home', searchPath: '', run: async () => ({ stdout: '{}' }), fetchRemote } });
   const server = app.listen(0, host);
   t.after(async () => {
     await new Promise(resolve => server.close(resolve));
@@ -59,6 +59,7 @@ test('MCP answers read-only questions only with the owner-only bearer token', as
   const files = {
     'catalog.json': JSON.stringify([card('some_org.x', 'lib'), card('Example', 'Tool')]),
     'receipts.json': JSON.stringify({ receipts: [] }),
+    'inventory.json': JSON.stringify({ installations: [{ name: 'Old Tool', githubUrl: 'https://github.com/example/old-tool', installed: true, location: '/fixture/old-tool', uninstallCommand: 'bash uninstall.sh' }], runs: [] }),
   };
   const { directory, port } = await serve(t, '127.0.0.1', files);
   const unchanged = async () => {
@@ -84,7 +85,7 @@ test('MCP answers read-only questions only with the owner-only bearer token', as
   assert.equal((await call(1, 'initialize', initialize.params)).protocolVersion, '2025-06-18');
   assert.equal((await post(base, auth, { jsonrpc: '2.0', method: 'notifications/initialized' })).status, 202);
   const tools = (await call(2, 'tools/list')).tools;
-  assert.deepEqual(tools.map(tool => tool.name), ['search', 'repo_info', 'detect', 'list_components']);
+  assert.deepEqual(tools.map(tool => tool.name), ['search', 'repo_info', 'detect', 'list_components', 'list_unmanaged']);
   assert.ok(tools.every(tool => tool.annotations.readOnlyHint));
 
   const tool = async (name, args) => {
@@ -100,16 +101,19 @@ test('MCP answers read-only questions only with the owner-only bearer token', as
   assert.equal(info.card.id, 'Example--Tool', 'matches the Card even when another Card has an owner githubRepo() rejects');
   assert.deepEqual((await tool('detect', { githubUrl: 'https://github.com/example/tool' })).version, commit);
   assert.deepEqual(await tool('list_components', {}), { receipts: [] });
+  const unmanaged = { items: [{ kind: 'app', name: 'Old Tool', path: '/fixture/old-tool' }], warnings: [] };
+  assert.deepEqual(await tool('list_unmanaged', {}), unmanaged);
+  assert.deepEqual(await (await fetch(`http://127.0.0.1:${port}/api/installer/unmanaged`)).json(), unmanaged);
   const invalid = await call(4, 'tools/call', { name: 'repo_info', arguments: { githubUrl: 'https://example.test/x' } });
   assert.ok(invalid.isError);
   await unchanged();
-  assert.deepEqual((await readdir(directory)).sort(), ['catalog.json', 'mcp-token', 'receipts.json', 'workspace'], 'MCP must not write the Library or Receipts');
+  assert.deepEqual((await readdir(directory)).sort(), ['catalog.json', 'inventory.json', 'mcp-token', 'receipts.json', 'workspace'], 'MCP must not write the Library or Receipts');
 
   const hold = holdSlow();
   const pending = post(`http://127.0.0.1:${port}/api/installer/detect`, {}, { githubUrl: 'https://github.com/slow/tool' });
   await hold.reached;
   try {
-    for (const name of ['detect', 'list_components']) {
+    for (const name of ['detect', 'list_components', 'list_unmanaged']) {
       const result = await call(5, 'tools/call', { name, arguments: { githubUrl: 'https://github.com/example/tool' } });
       assert.ok(result.isError, name);
       assert.match(result.content[0].text, /Another task is running/);

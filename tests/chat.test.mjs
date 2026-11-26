@@ -30,7 +30,7 @@ async function serve(t, createCodex) {
   });
 }
 
-test('chat answers using the same read-only MCP tools as DotCode, with server-owned credentials', async t => {
+test('chat answers using allowlisted DotCode MCP tools, with server-owned credentials', async t => {
   const post = await serve(t, ({ config, env }) => ({ startThread: options => ({ run: async prompt => {
     // Codex 0.172.0 always exposes `exec` and `apply_patch`, so the sandbox is the write guarantee.
     assert.equal(options.sandboxMode, 'read-only');
@@ -53,7 +53,7 @@ test('chat answers using the same read-only MCP tools as DotCode, with server-ow
       return response.json();
     };
     const { result: { tools } } = await rpc('tools/list');
-    assert.deepEqual(mcp.enabled_tools, tools.map(tool => tool.name));
+    assert.deepEqual(mcp.enabled_tools, tools.map(tool => tool.name).filter(name => name !== 'list_unmanaged'));
     assert.ok(tools.every(tool => tool.annotations.readOnlyHint));
     assert.match((await rpc('tools/call', { name: 'execute' })).error.message, /Unknown tool/);
     const { result } = await rpc('tools/call', { name: 'repo_info', arguments: { githubUrl } });

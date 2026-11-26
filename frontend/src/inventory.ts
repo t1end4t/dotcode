@@ -8,10 +8,6 @@ export type Installation = {
   method: string;
   configurationNotes: string;
   version: string;
-  installCommand: string;
-  updateCommand: string;
-  uninstallCommand: string;
-  verificationCommand: string;
   verifiedAt: string;
 };
 
