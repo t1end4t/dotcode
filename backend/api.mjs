@@ -113,6 +113,12 @@ function loopbackAddress(address) {
   return ip === '::1' || ip?.startsWith('127.') ? ip : undefined;
 }
 
+// Use the accepted socket's loopback address, never a client-supplied Host.
+function localOrigin(req) {
+  const ip = loopbackAddress(req.socket.localAddress);
+  return ip && `http://${ip === '::1' ? '[::1]' : ip}:${req.socket.localPort}`;
+}
+
 function isLocalRequest(req) {
   if (!loopbackAddress(req.socket.remoteAddress)) return false;
   const { host, origin, 'sec-fetch-site': fetchSite } = req.headers;
@@ -198,15 +204,20 @@ export function attachApi(app, {
   });
   const installerFailure = (res, error) => res.status(['CONFLICT', 'BUSY'].includes(error.code) ? 409 : error.code === 'NOT_FOUND' ? 404 : 400)
     .json({ error: error.message, code: error.code });
+  // Callers hold the busy lock; `cards` is the Library that `card` was read from.
+  const refreshCard = async (cards, card) => {
+    const refreshed = await installer.refreshDetection(card, { requireFresh: true });
+    if (refreshed !== card) await save(validateCatalog(cards.map(entry => entry === card ? refreshed : entry)), catalogPath);
+    return refreshed;
+  };
   const cardContext = exclusive(async id => {
     const cards = await loadCatalog() ?? [];
     const card = cards.find(card => card.id === id);
     if (!card) throw new InstallerError('NOT_FOUND', 'Choose a Card from the Library.');
-    const refreshed = await installer.refreshDetection(card, { requireFresh: true });
-    if (refreshed !== card) await save(validateCatalog(cards.map(entry => entry === card ? refreshed : entry)), catalogPath);
-    return refreshed;
+    return refreshCard(cards, card);
   });
-  const mcpPlan = ({ id, ...plan }) => ({ planId: id, ...plan });
+  // MCP clients open the link outside the DotCode page, so it needs the server origin.
+  const mcpPlan = ({ id, link, ...plan }, req) => ({ planId: id, ...plan, link: (localOrigin(req) || '') + link });
   // Opt in by name on both sides of MCP so the Assistant bearer cannot reach other tools.
   let assistant;
   const readTools = ['search', 'repo_info', 'detect', 'list_components'];
@@ -235,25 +246,27 @@ export function attachApi(app, {
         action: { type: 'string', enum: ['install'] }, githubUrl: githubUrlSchema,
         subpath: { type: 'string', description: 'Skill directory from Detector skillPaths. Use an empty string for a root skill.' },
       }, required: ['action', 'githubUrl', 'subpath'] },
-      call: exclusive(async (args, scope) => {
+      call: exclusive(async (args, scope, req) => {
         const { action, githubUrl, subpath } = args;
         if (action !== 'install' || typeof subpath !== 'string' || Object.keys(args).some(key => !['action', 'githubUrl', 'subpath'].includes(key))) {
           throw new InstallerError('INVALID_INPUT', 'Select a detected skill directory for an install Plan.');
         }
         const key = `https://github.com/${githubRepo(githubUrl)}`;
-        const card = scope ? scope.card : (await loadCatalog() ?? []).find(card => catalogKey(card.githubUrl) === key);
+        const cards = scope ? [] : await loadCatalog() ?? [];
+        const card = scope ? scope.card : cards.find(card => catalogKey(card.githubUrl) === key);
         if (!card || catalogKey(card.githubUrl) !== key) throw new InstallerError('INVALID_INPUT', 'Choose the selected Card from the Library.');
-        const detected = await installer.refreshDetection(card, { requireFresh: true });
+        // The Assistant's Card was saved by cardContext; persist only results read from the Library here.
+        const detected = scope ? await installer.refreshDetection(card, { requireFresh: true }) : await refreshCard(cards, card);
         if (!detected.detection.skillPaths.includes(subpath)) throw new InstallerError('INVALID_INPUT', 'Select a skill directory from the current Detector result.');
         // The Assistant must plan against the evidence it received, not a later revision.
         if (scope && detected !== card) throw new InstallerError('CONFLICT', 'Detector result changed. Start a new Install chat turn.');
         const proposal = await installer.plan({ action, githubUrl: card.githubUrl, subpath }, detected.detection, 'mcp');
         scope?.planIds.add(proposal.id);
-        return mcpPlan(proposal);
+        return mcpPlan(proposal, req);
       }) },
     { name: 'plan_status', description: 'Look up a proposed Plan by its ID. Does not approve or execute it.',
       inputSchema: { type: 'object', properties: { planId: { type: 'string' } }, required: ['planId'] },
-      call: ({ planId }) => mcpPlan(installer.planStatus(planId)) },
+      call: ({ planId }, _scope, req) => mcpPlan(installer.planStatus(planId), req) },
   ] });
   app.use('/api', (req, res, next) => {
     if (!isLocalRequest(req)) return res.status(403).json({ error: 'Local, same-origin requests only.' });
@@ -284,10 +297,8 @@ export function attachApi(app, {
       try { repo = `https://github.com/${githubRepo(githubUrl)}`; }
       catch (error) { return res.status(400).json({ error: error.message }); }
     }
-    // Use the accepted socket's loopback address, never a client-supplied Host.
-    const ip = loopbackAddress(req.socket.localAddress);
-    if (!ip) return res.status(403).json({ error: 'The Assistant requires a loopback connection.' });
-    const host = ip === '::1' ? '[::1]' : ip;
+    const origin = localOrigin(req);
+    if (!origin) return res.status(403).json({ error: 'The Assistant requires a loopback connection.' });
     if (chatRunning) return res.status(409).json({ error: 'The Assistant is answering another question. Try again shortly.' });
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(120000)]);
@@ -303,7 +314,7 @@ export function attachApi(app, {
       const tools = card ? [...readTools, 'plan', 'plan_status'] : readTools;
       const scope = assistant = { token: newBearer(), tools, card, planIds: new Set() };
       const reply = await answerChat({ message: message.trim(), githubUrl: card?.githubUrl ?? repo, card,
-        history: history.map(({ role, text }) => ({ role, text })), mcpUrl: `http://${host}:${req.socket.localPort}/mcp`,
+        history: history.map(({ role, text }) => ({ role, text })), mcpUrl: `${origin}/mcp`,
         token: scope.token, tools, signal, createCodex });
       if (!res.destroyed) res.json({ reply, ...(card && { plans: installer.listPlans().filter(plan => scope.planIds.has(plan.id)) }) });
     } catch (error) {

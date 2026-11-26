@@ -77,7 +77,7 @@ export function attachMcp(app, { isLocal, token, tools, assistant }) {
     const tool = available.get(params?.name);
     if (!tool) return res.json(fail(id, -32602, `Unknown tool: ${params?.name}`));
     const args = params.arguments && typeof params.arguments === 'object' && !Array.isArray(params.arguments) ? params.arguments : {};
-    try { res.json(reply(id, { content: [{ type: 'text', text: JSON.stringify(await tool.call(args, res.locals.scope), null, 2) }] })); }
+    try { res.json(reply(id, { content: [{ type: 'text', text: JSON.stringify(await tool.call(args, res.locals.scope, req), null, 2) }] })); }
     catch (error) { res.json(reply(id, { content: [{ type: 'text', text: error.code ? JSON.stringify({ code: error.code, message: error.message }) : error.message }], isError: true })); }
   });
   app.all('/mcp', (_req, res) => res.status(405).set('allow', 'POST').json(fail(null, -32000, 'Use POST.')));

@@ -159,9 +159,11 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
   useEffect(() => {
     if (!catalog) return;
     void loadPlans();
-    // Plan links from Codex CLI or Claude Code arrive as hash changes.
-    window.addEventListener("hashchange", loadPlans);
-    return () => window.removeEventListener("hashchange", loadPlans);
+    // Plan links from Codex CLI or Claude Code arrive as hash changes; other MCP Plans show up on focus or the next poll.
+    // ponytail: 15 s polling; switch to server-sent events if Plans need to appear instantly.
+    const poll = window.setInterval(() => { if (!document.hidden) void loadPlans(); }, 15000);
+    for (const event of ["hashchange", "focus"]) window.addEventListener(event, loadPlans);
+    return () => { window.clearInterval(poll); for (const event of ["hashchange", "focus"]) window.removeEventListener(event, loadPlans); };
   }, []);
 
   const act = (card: Card, action: Action) => {

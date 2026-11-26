@@ -122,7 +122,7 @@ test('Card Install hands fresh server-owned context to Codex and only proposes a
     proposal = JSON.parse(plan.result.content[0].text);
     assert.equal(proposal.status, 'pending');
     assert.equal(proposal.version, latest);
-    assert.match(proposal.link, /#plan-/);
+    assert.equal(proposal.link, `${origin}/#plan-${proposal.planId}`);
     approval = await send('/api/installer/approve', { planId: proposal.planId }, token);
     const status = await call('plan_status', { planId: proposal.planId });
     assert.deepEqual(JSON.parse(status.result.content[0].text), proposal);
@@ -163,6 +163,37 @@ test('Card Install hands fresh server-owned context to Codex and only proposes a
   assert.equal((await send('/api/installer/approve', { planId: proposal.planId }, await assistantToken())).status, 400);
   assert.deepEqual(await (await fetch(origin + '/api/installer')).json(), { receipts: [] });
   await assert.rejects(stat(path.join(directory, 'store')), { code: 'ENOENT' });
+});
+
+test('an external MCP Plan saves the refreshed Detector result and links to the running UI', async t => {
+  const card = { id: 'example--tool', name: 'Tool', repo: 'example/tool', githubUrl, category: 'Skills', categoryLabel: 'Skills',
+    description: '', primaryLanguage: 'Markdown', tags: [], defaultInstallCommand: '', customCommand: '', customNotes: '',
+    detection: { checkedAt: '2020-01-01T00:00:00.000Z', commit: 'a'.repeat(40), badges: ['Skill'], skillPaths: ['old-tool'] } };
+  const latest = 'b'.repeat(40);
+  const { directory, origin, externalToken } = await serve(t, undefined, '127.0.0.1', {
+    home: '/unused', run: async () => ({ stdout: '' }),
+    fetchRemote: async url => {
+      if (url.includes('/commits/')) return Response.json({ sha: latest });
+      if (url.includes('/git/trees/')) return Response.json({ tree: [{ path: 'skills/tool/SKILL.md', type: 'blob', mode: '100644' }] });
+      if (url.endsWith('/releases/latest')) return new Response(null, { status: 404 });
+      return Response.json({ full_name: card.repo });
+    },
+  });
+  await writeFile(path.join(directory, 'catalog.json'), JSON.stringify([card]));
+  const call = async (name, args) => {
+    const { result } = await (await fetch(origin + '/mcp', { method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${await externalToken()}` },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+    })).json();
+    assert.ok(!result.isError, result.content[0].text);
+    return JSON.parse(result.content[0].text);
+  };
+  const proposal = await call('plan', { action: 'install', githubUrl, subpath: 'skills/tool' });
+  assert.equal(proposal.link, `${origin}/#plan-${proposal.planId}`);
+  assert.equal((await call('plan_status', { planId: proposal.planId })).link, proposal.link);
+  const [saved] = (await (await fetch(origin + '/api/catalog')).json()).items;
+  assert.equal(saved.detection.commit, latest);
+  assert.deepEqual(saved.detection.skillPaths, ['skills/tool']);
 });
 
 test('chat refuses a pairing token that other local users can read', async t => {
