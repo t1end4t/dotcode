@@ -12,7 +12,8 @@ export async function answerChat({ message, githubUrl, history, mcpUrl, token, t
   try {
     // Do not inherit GitHub tokens, hook environment variables, or other app secrets.
     const env = Object.fromEntries(['PATH', 'HOME', 'CODEX_HOME', 'OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS',
-      'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'SSL_CERT_FILE']
+      'HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'NO_PROXY', 'no_proxy', 'ALL_PROXY', 'all_proxy',
+      'SSL_CERT_FILE', 'SSL_CERT_DIR', 'CODEX_CA_CERTIFICATE']
       .filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]));
     env.PATH = [path.dirname(process.execPath), env.PATH].filter(Boolean).join(path.delimiter);
     env.DOTCODE_MCP_TOKEN = token;
@@ -32,8 +33,8 @@ export async function answerChat({ message, githubUrl, history, mcpUrl, token, t
         enabled_tools: tools, startup_timeout_sec: 10, default_tools_approval_mode: 'auto',
       } },
     } });
-    // The model catalog forces code mode, so the model still sees `exec` and `apply_patch` (codex 0.172.0 has no
-    // config to remove them). The read-only sandbox with approval `never` is what blocks writes and commands.
+    // Code mode can still advertise `exec` and `apply_patch`. `features.shell_tool=false` disables shell execution;
+    // the read-only sandbox with approval `never` blocks writes, not reads.
     // ponytail: replay a small transcript in a fresh ephemeral thread; no session IDs or on-disk history.
     const thread = codex.startThread({ workingDirectory, sandboxMode: 'read-only', approvalPolicy: 'never',
       webSearchMode: 'disabled', networkAccessEnabled: false, skipGitRepoCheck: true });

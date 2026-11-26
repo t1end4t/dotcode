@@ -31,13 +31,18 @@ async function serve(t, createCodex) {
 }
 
 test('chat answers using allowlisted DotCode MCP tools, with server-owned credentials', async t => {
+  const networkEnv = Object.fromEntries(['https_proxy', 'http_proxy', 'no_proxy', 'ALL_PROXY', 'all_proxy', 'SSL_CERT_DIR', 'CODEX_CA_CERTIFICATE']
+    .map(key => [key, `test-${key}`]));
+  t.mock.property(process, 'env', { ...process.env, ...networkEnv, GITHUB_TOKEN: 'not-for-codex' });
   const post = await serve(t, ({ config, env }) => ({ startThread: options => ({ run: async prompt => {
-    // Codex 0.172.0 always exposes `exec` and `apply_patch`, so the sandbox is the write guarantee.
+    for (const [key, value] of Object.entries(networkEnv)) assert.equal(env[key], value);
+    assert.ok(!Object.hasOwn(env, 'GITHUB_TOKEN'));
+    // `features.shell_tool=false` disables shell execution; the read-only sandbox blocks writes, not reads.
+    assert.equal(config.features.shell_tool, false);
     assert.equal(options.sandboxMode, 'read-only');
     assert.equal(options.approvalPolicy, 'never');
     assert.equal(options.networkAccessEnabled, false);
     assert.equal(options.webSearchMode, 'disabled');
-    assert.equal(config.features.shell_tool, false);
     assert.equal(config.features.hooks, false);
     assert.equal(config.agents.enabled, false);
     assert.deepEqual(Object.keys(config.mcp_servers), ['dotcode']);
