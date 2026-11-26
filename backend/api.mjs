@@ -108,9 +108,13 @@ async function discoverInstallations(directory, installations) {
   }
   return observed;
 }
+function loopbackAddress(address) {
+  const ip = address?.replace(/^::ffff:/, '');
+  return ip === '::1' || ip?.startsWith('127.') ? ip : undefined;
+}
+
 function isLocalRequest(req) {
-  const ip = req.socket.remoteAddress;
-  if (ip !== '::1' && !ip?.startsWith('127.') && !ip?.startsWith('::ffff:127.')) return false;
+  if (!loopbackAddress(req.socket.remoteAddress)) return false;
   const { host, origin, 'sec-fetch-site': fetchSite } = req.headers;
   if (req.headersDistinct.host?.length !== 1 || !/^(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d{1,5})?$/i.test(host)) return false;
   try {
@@ -228,14 +232,16 @@ export function attachApi(app, {
       try { repo = `https://github.com/${githubRepo(githubUrl)}`; }
       catch (error) { return res.status(400).json({ error: error.message }); }
     }
+    // Use the accepted socket's loopback address, never a client-supplied Host.
+    const ip = loopbackAddress(req.socket.localAddress);
+    if (!ip) return res.status(403).json({ error: 'The Assistant requires a loopback connection.' });
+    const host = ip === '::1' ? '[::1]' : ip;
     if (chatRunning) return res.status(409).json({ error: 'The Assistant is answering another question. Try again shortly.' });
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(120000)]);
     res.once('close', () => controller.abort());
     chatRunning = true;
     try {
-      // Use the actual listener, never a client-supplied URL or forwarded Host.
-      const host = req.socket.localFamily === 'IPv6' ? '[::1]' : '127.0.0.1';
       // Opt in by name so future mutating MCP tools are not exposed to this chat.
       const reply = await answerChat({ message: message.trim(), githubUrl: repo, history: history.map(({ role, text }) => ({ role, text })),
         mcpUrl: `http://${host}:${req.socket.localPort}/mcp`, token: await token,

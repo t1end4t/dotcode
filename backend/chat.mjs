@@ -16,6 +16,12 @@ export async function answerChat({ message, githubUrl, history, mcpUrl, token, t
       'SSL_CERT_FILE', 'SSL_CERT_DIR', 'CODEX_CA_CERTIFICATE']
       .filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]));
     env.PATH = [path.dirname(process.execPath), env.PATH].filter(Boolean).join(path.delimiter);
+    // Codex's proxy matcher requires a literal IP exclusion even when NO_PROXY is '*'.
+    const mcpHost = new URL(mcpUrl).hostname.replace(/^\[|\]$/g, '');
+    const { NO_PROXY, no_proxy } = env;
+    const bypassMcp = exclusions => [exclusions, mcpHost].filter(Boolean).join(',');
+    env.NO_PROXY = bypassMcp(NO_PROXY ?? no_proxy);
+    env.no_proxy = bypassMcp(no_proxy ?? NO_PROXY);
     env.DOTCODE_MCP_TOKEN = token;
     const codex = createCodex({ codexPathOverride, env, config: {
       developer_instructions: instructions,
