@@ -147,6 +147,28 @@ test('an Unmanaged item at an Activation path blocks install with a clear messag
   assert.equal(await readFile(path.join(foreign, 'SKILL.md'), 'utf8'), '# Mine');
 });
 
+test('inventory records with a missing or absent location do not block install, an existing one does', async t => {
+  let installations = [];
+  const { installer, root } = await fixture(t, { loadInstallations: async () => installations });
+  const record = { name: 'Old review', githubUrl, installed: true };
+  installations = [record, { ...record, location: path.join(root, 'gone') }];
+  await installer.plan({ action: 'install', githubUrl, subpath: 'skills/review' });
+  await mkdir(path.join(root, 'gone'));
+  await assert.rejects(installer.plan({ action: 'install', githubUrl, subpath: 'skills/review' }), { code: 'CONFLICT', message: /Unmanaged Old review blocks/ });
+});
+
+test('PATH entries that resolve to the same directory, like /bin and /usr/bin on merged /usr, are scanned once', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'dotcode-path-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(path.join(root, 'usr/bin'), { recursive: true });
+  await writeFile(path.join(root, 'usr/bin/tool'), '#!/bin/sh\n', { mode: 0o755 });
+  await symlink('usr/bin', path.join(root, 'bin'));
+  const { installer } = await fixture(t, { searchPath: [path.join(root, 'usr/bin'), path.join(root, 'bin')].join(':') });
+  const { items, warnings } = await installer.unmanaged();
+  assert.deepEqual(items.map(item => item.path), [path.join(root, 'usr/bin/tool')]);
+  assert.equal(warnings.some(warning => warning.includes('multiple PATH entries')), false);
+});
+
 test('Unmanaged scan lists CLIs, skills, subagents, plugins and units without a Receipt, skips Nix, and writes nothing', async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'dotcode-unmanaged-'));
   t.after(() => rm(root, { recursive: true, force: true }));

@@ -166,6 +166,8 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     for (const item of await loadInstallations()) {
       if (typeof item?.githubUrl !== 'string' || githubKey(item.githubUrl) !== githubKey(value.githubUrl) ||
         (item.kind && item.kind !== kind) || (item.componentId && item.componentId !== id)) continue;
+      // Stale or location-less records are shown, but only something still on disk blocks an install.
+      if (!path.isAbsolute(installationPath(item)) || !await lstat(item.location).catch(() => null)) continue;
       if (await isUnmanagedInstallation(item, receipts)) {
         const target = installationPath(item);
         const name = typeof item.name === 'string' ? item.name : value.githubUrl.split('/').at(-1);
@@ -207,7 +209,12 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       try { return (await handle.stat()).isFile() ? await handle.readFile('utf8') : ''; }
       finally { await handle.close(); }
     };
+    // Aliased PATH entries (merged /usr: /bin -> /usr/bin) are one directory, not duplicates.
+    const scanned = new Set();
     for (const bin of pathDirectories) {
+      const real = await resolved(bin) ?? bin;
+      if (scanned.has(real)) continue;
+      scanned.add(real);
       if (await found(bin)) for (const target of await entries(bin)) {
         if (isExecutable(await found(target))) items.push({ kind: 'cli', name: path.basename(target), path: target });
       }
