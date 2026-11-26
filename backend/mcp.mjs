@@ -1,23 +1,32 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { chmod, lstat, readFile, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, writeFile } from 'node:fs/promises';
 import express from 'express';
 
 const protocolVersions = ['2025-11-25', '2025-06-18', '2025-03-26'];
 const digest = value => createHash('sha256').update(value).digest();
 export const newBearer = () => randomBytes(32).toString('base64url');
-function hasBearer(req, expected) {
+export function hasBearer(req, expected) {
+  if (req.headersDistinct.authorization?.length !== 1) return false;
   const provided = /^Bearer ([^\s]+)$/i.exec(req.headers.authorization ?? '')?.[1];
   return !!(expected && provided && timingSafeEqual(digest(provided), digest(expected)));
 }
 
-export async function mcpToken(file) {
+export async function fileBearer(file, { pairing = false } = {}) {
   try { await writeFile(file, newBearer() + '\n', { flag: 'wx', mode: 0o600 }); }
   catch (error) { if (error.code !== 'EEXIST') throw error; }
-  if (!(await lstat(file)).isFile()) throw new Error('MCP token must be a regular file.');
-  await chmod(file, 0o600);
-  const token = (await readFile(file, 'utf8')).trim();
-  if (token.length < 32) throw new Error('MCP token file is invalid.');
-  return token;
+  const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const info = await handle.stat();
+    if (!info.isFile()) throw new Error('Bearer token must be a regular file.');
+    if (pairing && (info.uid !== process.getuid?.() || (info.mode & 0o777) !== 0o600 || info.nlink !== 1 || info.size > 45)) {
+      throw new Error('Assistant token must be an owner-only 0600 file. Rotate it before pairing.');
+    }
+    if (!pairing) await handle.chmod(0o600);
+    const token = (await handle.readFile('utf8')).trim();
+    if (pairing ? !/^[\w-]{43}$/.test(token) : token.length < 32) throw new Error('Bearer token file is invalid.');
+    return token;
+  } finally { await handle.close(); }
 }
 
 // ponytail: stateless Streamable HTTP with JSON responses only; add sessions and SSE when a tool needs to stream or notify.
@@ -28,6 +37,7 @@ export function attachMcp(app, { isLocal, token, tools, assistant }) {
   const fail = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, message } });
   app.use('/mcp', async (req, res, next) => {
     if (!isLocal(req)) return res.status(403).json(fail(null, -32000, 'Local, same-origin requests only.'));
+    // The scoped bearer is in memory only and changes on each server start.
     if (hasBearer(req, assistant?.token)) {
       res.locals.mcpTools = assistantByName;
     } else {

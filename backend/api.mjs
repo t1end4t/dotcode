@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import express from 'express';
 import { createInstaller, InstallerError } from './installer.mjs';
 import { githubKey as catalogKey, githubRepo } from './github.mjs';
-import { attachMcp, mcpToken, newBearer } from './mcp.mjs';
+import { attachMcp, fileBearer, hasBearer, newBearer } from './mcp.mjs';
 import { answerChat } from './chat.mjs';
 
 const textFields = ['name', 'githubUrl', 'action', 'location', 'method', 'configurationNotes', 'version'];
@@ -180,8 +180,11 @@ export function attachApi(app, {
     await writeFile(temporary, JSON.stringify(state, null, 2), { mode: 0o600 });
     await rename(temporary, file);
   };
-  const token = prepare().then(() => mcpToken(path.join(directory, 'mcp-token')));
+  const prepared = prepare();
+  const token = prepared.then(() => fileBearer(path.join(directory, 'mcp-token')));
   token.catch(error => console.error(`DotCode MCP disabled: ${error.message}`));
+  const pairingToken = prepared.then(() => fileBearer(path.join(directory, 'assistant-token'), { pairing: true }));
+  pairingToken.catch(error => console.error(`DotCode Assistant disabled: ${error.message}`));
   const githubUrlSchema = { type: 'string', description: 'GitHub repository URL, e.g. https://github.com/owner/repo' };
   const whenIdle = call => args => {
     if (busy || initializingCatalog) throw new Error('Another task is running. Wait for it to finish.');
@@ -222,8 +225,15 @@ export function attachApi(app, {
     next();
   });
   let chatRunning = false;
-  app.post('/api/ai/chat', express.json({ limit: '128kb' }), async (req, res) => {
+  // Loopback proves where a request came from, not which local user sent it.
+  app.post('/api/ai/chat', async (req, res, next) => {
     res.setHeader('cache-control', 'no-store');
+    let paired;
+    try { paired = hasBearer(req, await pairingToken); }
+    catch { return res.status(503).json({ error: 'Assistant pairing is unavailable. Check DOTCODE_HOME/assistant-token and the server log.' }); }
+    if (!paired) return res.status(401).set('www-authenticate', 'Bearer').json({ error: 'Pair this page with DOTCODE_HOME/assistant-token.', code: 'PAIRING_REQUIRED' });
+    next();
+  }, express.json({ limit: '128kb' }), async (req, res) => {
     const { message, githubUrl, history = [] } = req.body ?? {};
     if (typeof message !== 'string' || !message.trim() || message.length > 4000 || !Array.isArray(history) || history.length > 8 ||
         history.some(entry => !['user', 'assistant'].includes(entry?.role) || typeof entry.text !== 'string' || entry.text.length > 4000)) {

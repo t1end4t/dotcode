@@ -46,6 +46,7 @@ evaluate(`
   window.fetch = async (input, options) => {
     const url = new URL(String(input), location.href);
     if (url.pathname === '/api/ai/chat') {
+      if (options.headers.authorization !== 'Bearer ' + 'p'.repeat(43)) throw new Error('Chat must send the pairing token.');
       window.__chatRequests.push(JSON.parse(options.body));
       if (window.__chatRequests.length === 1) return Response.json({ reply: 'The README describes a code review library.' });
       if (window.__chatRequests.length === 2) return Response.json({ error: 'Codex sign-in failed. Run codex login.' }, { status: 502 });
@@ -163,6 +164,16 @@ try {
     await new Promise(resolve => setTimeout(resolve, 50));
     node.form.requestSubmit(); return true;
   `);
+  assert.equal(evaluate('return !!document.querySelector("#chat-input");'), false, 'Chat must stay locked until the page is paired');
+  evaluate(`
+    const node = document.querySelector('#assistant-token');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(node, ${JSON.stringify('p'.repeat(43))});
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    node.form.requestSubmit(); return true;
+  `);
+  command('wait', '--selector', '#chat-input');
+  assert.equal(evaluate('return document.body.textContent.includes(' + JSON.stringify('p'.repeat(43)) + ');'), false, 'The pairing token must not be rendered');
   sendChat('What does this repository do?');
   command('wait', '--text', 'The README describes a code review library.');
   assert.equal(evaluate(`

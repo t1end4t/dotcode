@@ -116,6 +116,9 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatPending, setChatPending] = useState(false);
   const [chatError, setChatError] = useState("");
+  // Held only by this page so reloads and other tabs must pair again.
+  const [pairingToken, setPairingToken] = useState("");
+  const [pairingDraft, setPairingDraft] = useState("");
   const [announcement, setAnnouncement] = useState("");
   const [uninstallRepo, setUninstallRepo] = useState<string | null>(null);
   const [repoInput, setRepoInput] = useState("");
@@ -158,7 +161,7 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
   const submitChat = async (event: React.FormEvent) => {
     event.preventDefault();
     const message = draft.trim();
-    if (!message || chatPending) return;
+    if (!message || chatPending || (catalog && !pairingToken)) return;
     const user: Message = { role: "user", text: `${context ? `[${context.repo}] ` : ""}${message}` };
     if (!catalog) {
       setMessages(previous => [...previous, user, { role: "assistant", text: "This prototype is not connected to an AI provider." +
@@ -172,10 +175,11 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
     setMessages(previous => [...previous, user]);
     try {
       const response = await fetch("/api/ai/chat", {
-        method: "POST", headers: { "content-type": "application/json" },
+        method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${pairingToken}` },
         body: JSON.stringify({ message, githubUrl: context?.source?.githubUrl,
           history: messages.slice(-8).map(({ role, text }) => ({ role, text: text.slice(0, 4000) })) }),
       });
+      if (response.status === 401) setPairingToken("");
       const { reply } = await readApiJson(response);
       if (typeof reply !== "string" || !reply.trim()) throw new Error("Codex returned an empty answer. Try again.");
       setMessages(previous => [...previous, { role: "assistant", text: reply }]);
@@ -286,7 +290,13 @@ function Prototype({ catalog }: { catalog?: ReturnType<typeof useCatalog> }) {
         <header className="assistant-header"><div><MessageSquare size={16} /><h2>Assistant</h2><span className="demo-label">{catalog ? "Read-only" : "Demo"}</span></div><button className="icon-button" onClick={closeChat} aria-label="Close assistant"><PanelRightClose size={17} /></button></header>
         <div className="chat-messages" role="log" aria-label="Conversation"><div className="chat-intro"><h3>{context ? context.name : "Ask about a repository"}</h3><p>{context ? context.description : "Select Ask assistant on a Card or include a GitHub repository in your question."}</p><div className="assistant-mode">{catalog ? "Powered by Codex. The Assistant can look up repositories but cannot install or change anything." : "Preview only. AI is not connected."}</div>{!catalog && <button className="chat-suggestion" onClick={() => { setContextRepo("ggml-org/llama.cpp"); setDraft("Help me install llama.cpp on this machine"); chatInput.current?.focus(); }}><span>Install llama.cpp</span><ArrowRight size={14} /></button>}<button className="chat-suggestion" disabled={chatPending} onClick={() => { setDraft("Review the tools I have installed"); chatInput.current?.focus(); }}><span>Review installed tools</span><ArrowRight size={14} /></button></div>{messages.map((message, index) => <div key={index} className={`chat-message ${message.role}`}><span>{message.role === "user" ? "You" : catalog ? "Assistant" : "Assistant · demo"}</span><p>{message.text}</p></div>)}{chatPending && <p className="chat-message" role="status">Waiting for Codex…</p>}{chatError && <p className="chat-message chat-error" role="alert">{chatError}</p>}<div ref={chatEnd} /></div>
         {context && <div className="chat-context"><div><Github size={14} /><strong>{context.name}</strong><button className="icon-button" aria-label="Remove repository context" disabled={chatPending} onClick={() => setContextRepo(null)}><X size={13} /></button></div><span>{context.repo}</span><div className="context-actions">{!catalog && !context.referenceBadge && context.state !== "unmanaged" && (context.state === "available" ? ["install"] as const : [context.state === "enabled" ? "disable" : "enable"] as const).map(action => <button key={action} className="button" disabled={context.backend === "—"} onClick={() => { const result = act(context, action); setMessages(previous => [...previous, { role: "assistant", text: `${result} Simulated action; your machine is unchanged.` }]); }}>{actionLabels[action]} {context.name}</button>)}<span className={`status ${context.state}`}><span className="status-dot" />{context.referenceBadge ? "Not installable" : stateLabels[context.state]}</span></div></div>}
-        <form className="chat-composer" onSubmit={submitChat}><label className="sr-only" htmlFor="chat-input">Message assistant</label><textarea ref={chatInput} id="chat-input" value={draft} onChange={event => setDraft(event.target.value)} placeholder="Ask about your tools…" rows={3} maxLength={4000} readOnly={chatPending} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><div><span>Enter to send · Shift + Enter for a new line</span><button className="send-button" type="submit" disabled={!draft.trim() || chatPending} aria-label="Send message"><ArrowRight size={16} /></button></div></form>
+        {catalog && !pairingToken ? <form className="chat-composer chat-pairing" onSubmit={event => {
+          event.preventDefault();
+          const value = pairingDraft.trim();
+          if (!/^[\w-]{43}$/.test(value)) { setChatError("Paste the 43-character token from DOTCODE_HOME/assistant-token."); return; }
+          setPairingToken(value); setPairingDraft(""); setChatError(""); requestAnimationFrame(() => chatInput.current?.focus());
+        }}><label htmlFor="assistant-token">Pair this page</label><p id="assistant-token-help">Paste the token from <code>~/.dotcode/assistant-token</code>. It stays in this page until you reload.</p><div><input id="assistant-token" type="password" autoComplete="off" spellCheck={false} value={pairingDraft} onChange={event => setPairingDraft(event.target.value)} aria-describedby="assistant-token-help" /><button className="button" type="submit" disabled={!pairingDraft.trim()}>Pair</button></div></form> :
+        <form className="chat-composer" onSubmit={submitChat}><label className="sr-only" htmlFor="chat-input">Message assistant</label><textarea ref={chatInput} id="chat-input" value={draft} onChange={event => setDraft(event.target.value)} placeholder="Ask about your tools…" rows={3} maxLength={4000} readOnly={chatPending} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} /><div><span>Enter to send · Shift + Enter for a new line</span><button className="send-button" type="submit" disabled={!draft.trim() || chatPending} aria-label="Send message"><ArrowRight size={16} /></button></div></form>}
       </aside>
     </div>
     <div className="action-announcement" role="status">{announcement && <><Check size={15} />{announcement}<button className="icon-button" onClick={() => setAnnouncement("")} aria-label="Dismiss notification"><X size={14} /></button></>}</div>

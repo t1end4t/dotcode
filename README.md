@@ -56,6 +56,12 @@ read-only sandbox with network access and approvals disabled. This constrains
 sandboxed commands, not Codex itself: Codex still contacts its provider and
 DotCode MCP. The sandbox is not a filesystem read boundary.
 
+The first time you open the Assistant on a page, paste the token from
+`DOTCODE_HOME/assistant-token` (owner-only, `0600`). The page keeps it in memory
+and sends it only with chat requests; reload to forget it. DotCode gives Codex a
+separate per-start MCP bearer that can call only the tools listed above. To rotate
+the pairing token, delete the file and restart DotCode.
+
 Set `OPENAI_API_KEY` in the server environment, or sign in with `codex login`
 using Codex’s default file-backed credential store. DotCode’s bundled Codex reads
 `auth.json` from the server’s `CODEX_HOME` (default `~/.codex`). It ignores
@@ -74,6 +80,7 @@ DotCode keeps managed data outside this repository, under `~/.dotcode` by defaul
   catalog.json     Your library, notes, and tags
   inventory.json   Installation records and run logs
   mcp-token        Bearer token for /mcp (owner read/write only)
+  assistant-token  Pairing token for the in-app Assistant (owner read/write only)
 ```
 
 This directory holds machine-local data, not application source. Keep it out of Git.
@@ -96,7 +103,7 @@ Set environment variables when starting the server. See `.env.example` for basic
 
 **Keep DotCode local.** Do not expose it as an unauthenticated public service, including through a reverse proxy. DotCode listens only on loopback by default. Changing `HOST` changes the listener address; API writes still require a loopback connection, a local `Host`, and a same-origin `Origin` header if sent.
 
-The loopback check uses the immediate socket peer. A reverse proxy that connects to DotCode over loopback is inside that trust boundary: DotCode sees the proxy as the peer even when the original client is remote. The Assistant’s HTTP route does not authenticate the browser separately; another local OS user can reach it even without the MCP token. Do not run it with provider credentials on a machine shared with untrusted users.
+The loopback check uses the immediate socket peer. A reverse proxy that connects to DotCode over loopback is inside that trust boundary: DotCode sees the proxy as the peer even when the original client is remote. The Assistant’s chat route also requires the pairing token, so another local OS user who cannot read `DOTCODE_HOME/assistant-token` cannot start Codex. Other UI routes still rely on the loopback and same-origin checks.
 
 ## Ask an agent over MCP
 

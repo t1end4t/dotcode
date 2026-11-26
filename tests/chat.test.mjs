@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer as createTcpServer } from 'node:net';
 import { once } from 'node:events';
@@ -32,16 +32,78 @@ async function serve(t, createCodex, host = '127.0.0.1') {
   });
   await once(server, 'listening');
   const origin = `http://${host}:${server.address().port}`;
-  return (body, headers = {}) => fetch(`${origin}/api/ai/chat`, {
-    method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body),
+  // An unpaired request waits for the server to create its tokens.
+  assert.equal((await fetch(`${origin}/api/ai/chat`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 401);
+  const tokenFile = path.join(directory, 'assistant-token');
+  const assistantToken = async () => (await readFile(tokenFile, 'utf8')).trim();
+  const externalToken = async () => (await readFile(path.join(directory, 'mcp-token'), 'utf8')).trim();
+  const post = async (body, headers = {}) => fetch(`${origin}/api/ai/chat`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${await assistantToken()}`, ...headers }, body: JSON.stringify(body),
   });
+  return { origin, post, tokenFile, assistantToken, externalToken };
 }
+
+test('chat requires the owner-only pairing token before starting Codex', async t => {
+  let starts = 0;
+  let scoped;
+  const { origin, post, tokenFile, assistantToken, externalToken } = await serve(t, ({ env }) => {
+    starts++;
+    scoped = env.DOTCODE_MCP_TOKEN;
+    return { startThread: () => ({ run: async () => ({ finalResponse: 'Ready.' }) }) };
+  });
+  const body = { message: 'Check pairing' };
+  const anonymous = await fetch(`${origin}/api/ai/chat`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  assert.equal(anonymous.status, 401);
+  assert.equal(anonymous.headers.get('cache-control'), 'no-store');
+  assert.equal((await stat(tokenFile)).mode & 0o777, 0o600);
+  const paired = await assistantToken();
+  assert.match(paired, /^[\w-]{43}$/);
+  for (const token of ['invalid', await externalToken()]) {
+    assert.equal((await post(body, { authorization: `Bearer ${token}` })).status, 401);
+  }
+  assert.equal(starts, 0);
+  const response = await post(body);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { reply: 'Ready.' });
+  assert.equal(starts, 1);
+  assert.notEqual(scoped, paired);
+  assert.notEqual(scoped, await externalToken());
+  assert.equal((await post(body, { authorization: `Bearer ${scoped}` })).status, 401);
+  assert.equal(starts, 1);
+  const mcp = token => fetch(`${origin}/mcp`, { method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+  });
+  assert.equal((await mcp(paired)).status, 401);
+  const { result } = await (await mcp(await externalToken())).json();
+  assert.ok(result.tools.some(tool => tool.name === 'list_unmanaged'));
+});
+
+test('chat refuses a pairing token that other local users can read', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'dotcode-chat-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(path.join(directory, 'assistant-token'), 'p'.repeat(43) + '\n', { mode: 0o644 });
+  await chmod(path.join(directory, 'assistant-token'), 0o644);
+  let starts = 0;
+  const app = express();
+  attachApi(app, { directory, createCodex: () => { starts++; } });
+  const server = app.listen(0, '127.0.0.1');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  await once(server, 'listening');
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/ai/chat`, { method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${'p'.repeat(43)}` }, body: JSON.stringify({ message: 'Hi' }) });
+  assert.equal(response.status, 503);
+  assert.equal(starts, 0);
+  assert.equal((await stat(path.join(directory, 'assistant-token'))).mode & 0o777, 0o644, 'DotCode must not silently repair a pairing token');
+});
 
 test('chat answers using allowlisted DotCode MCP tools, with server-owned credentials', async t => {
   const networkEnv = Object.fromEntries(['https_proxy', 'http_proxy', 'ALL_PROXY', 'all_proxy', 'SSL_CERT_DIR', 'CODEX_CA_CERTIFICATE']
     .map(key => [key, `test-${key}`]));
   t.mock.property(process, 'env', { ...process.env, ...networkEnv, NO_PROXY: 'example.test', no_proxy: 'other.test', GITHUB_TOKEN: 'not-for-codex' });
-  const post = await serve(t, ({ config, env }) => ({ startThread: options => ({ run: async prompt => {
+  const { post } = await serve(t, ({ config, env }) => ({ startThread: options => ({ run: async prompt => {
     for (const [key, value] of Object.entries(networkEnv)) assert.equal(env[key], value);
     assert.deepEqual(env.NO_PROXY?.split(','), ['example.test', '127.0.0.1']);
     assert.deepEqual(env.no_proxy?.split(','), ['other.test', '127.0.0.1']);
@@ -161,7 +223,7 @@ test('the bundled Linux read-only sandbox blocks writes and network access', { s
 test('chat connects to MCP on the bound loopback address, not the request Host', async t => {
   const { NO_PROXY, no_proxy, ...networkEnv } = process.env;
   t.mock.property(process, 'env', networkEnv);
-  const post = await serve(t, ({ config, env }) => ({ startThread: () => ({ run: async () => {
+  const { post } = await serve(t, ({ config, env }) => ({ startThread: () => ({ run: async () => {
     const mcp = config.mcp_servers.dotcode;
     assert.equal(new URL(mcp.url).hostname, '127.0.0.2');
     assert.equal(env.NO_PROXY, '127.0.0.2');
@@ -179,7 +241,7 @@ test('chat connects to MCP on the bound loopback address, not the request Host',
 test('chat rejects foreign origins and invalid input, and surfaces safe errors from Codex', async t => {
   const secret = 'never-return-this-token';
   let attempts = 0;
-  const post = await serve(t, () => ({ startThread: () => ({ run: async () => {
+  const { post } = await serve(t, () => ({ startThread: () => ({ run: async () => {
     throw new Error(`${attempts++ ? 'Connection refused' : '401 Unauthorized'}: ${secret}`);
   } }) }));
   assert.equal((await post({ message: 'Read the repo' }, { origin: 'https://foreign.test' })).status, 403);

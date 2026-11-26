@@ -13,6 +13,7 @@ Installer có thể chạy code trên máy, nên `/mcp` là ranh giới tin cậ
 
 - `/mcp` dùng cùng kiểm tra request local như API của installer: IP loopback, `Host` là localhost, `Origin` cùng origin. Kiểm tra này chặn máy khác trong mạng và DNS rebinding từ trình duyệt.
 - Thêm bearer token, sinh ngẫu nhiên và lưu ở `DOTCODE_HOME/mcp-token` với quyền `0600`, vì client MCP không gửi `Origin` nên kiểm tra origin không phân biệt được client hợp lệ. Token chặn user khác trên cùng máy, những người không đọc được file đó.
+- Chat trong app cần token ghép trang riêng ở `DOTCODE_HOME/assistant-token` (`0600`), vì kiểm tra loopback không phân biệt các user local. Codex nhận một bearer MCP khác, chỉ nằm trong bộ nhớ, đổi mỗi lần server khởi động, và server chỉ cho gọi các tool chỉ đọc trong allowlist.
 - `HOST` mặc định là `127.0.0.1`. Mọi route ghi, kể cả ghi Library, kiểm tra request local ngay cả khi user đổi `HOST`.
 
 ## Các phương án đã cân nhắc
