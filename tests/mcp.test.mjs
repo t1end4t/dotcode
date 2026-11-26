@@ -85,8 +85,8 @@ test('MCP answers read-only questions only with the owner-only bearer token', as
   assert.equal((await call(1, 'initialize', initialize.params)).protocolVersion, '2025-06-18');
   assert.equal((await post(base, auth, { jsonrpc: '2.0', method: 'notifications/initialized' })).status, 202);
   const tools = (await call(2, 'tools/list')).tools;
-  assert.deepEqual(tools.map(tool => tool.name), ['search', 'repo_info', 'detect', 'list_components', 'list_unmanaged']);
-  assert.ok(tools.every(tool => tool.annotations.readOnlyHint));
+  assert.deepEqual(tools.map(tool => tool.name), ['search', 'repo_info', 'detect', 'list_components', 'list_unmanaged', 'plan', 'plan_status']);
+  assert.ok(tools.every(tool => tool.annotations.readOnlyHint === (tool.name !== 'plan')));
 
   const tool = async (name, args) => {
     const result = await call(3, 'tools/call', { name, arguments: args });

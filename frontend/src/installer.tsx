@@ -39,7 +39,7 @@ export async function executeInstallerAction(body: Record<string, unknown>) {
   return post('execute', { planId: plan.id });
 }
 
-export function SkillControls({ item, onChanged, onUnsupported }: { item: ManageableItem; onChanged: () => Promise<void>; onUnsupported: () => void }) {
+export function SkillControls({ item, onChanged, onInstall, installDisabled }: { item: ManageableItem; onChanged: () => Promise<void>; onInstall: () => void; installDisabled?: boolean }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const receipts = item.installedSkills ?? [];
@@ -51,8 +51,7 @@ export function SkillControls({ item, onChanged, onUnsupported }: { item: Manage
       await executeInstallerAction(body);
       await onChanged();
     } catch (failure) {
-      if (failure instanceof Error && 'code' in failure && failure.code === 'NOT_SKILL' && !item.detection?.skillPaths.length && body.action === 'install') onUnsupported();
-      else setError(failure instanceof Error ? failure.message : 'Installer request failed.');
+      setError(failure instanceof Error ? failure.message : 'Installer request failed.');
     } finally { setWorking(false); }
   };
   return <div className="skill-controls flex flex-col gap-2" onClick={event => event.stopPropagation()} aria-busy={working}>
@@ -68,7 +67,7 @@ export function SkillControls({ item, onChanged, onUnsupported }: { item: Manage
     </div>) : item.installed
       // No Receipt: DotCode never runs old lifecycle scripts, so there is nothing to act on.
       ? <span className="text-xs" title="Installed without DotCode. Manage it with the tool that installed it.">Unmanaged · display only</span>
-      : <button type="button" disabled={working} className="rt-button rt-primary" onClick={() => void apply({ action: 'install', githubUrl: item.githubUrl })}>{working ? 'Working…' : 'Install'}</button>}
+      : <button type="button" disabled={installDisabled} className="rt-button rt-primary" onClick={onInstall}>Install</button>}
     {error && <p role="alert" className="text-xs text-(--ctp-red)">{error}</p>}
   </div>;
 }

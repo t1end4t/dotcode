@@ -35,7 +35,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
   const appDirectory = fileURLToPath(new URL('..', import.meta.url)).replace(/\/$/, '');
   if (directory === home || directory === path.parse(directory).root || [appDirectory, path.join(home, 'nix-dev/nixos-conf')].some(root => contains(root, directory) || contains(directory, root))) throw new Error('Installer data must be separate from source, home and NixOS configuration.');
   const receiptFile = path.join(directory, 'receipts.json');
-  const pending = new Map();
+  const plans = new Map();
   let executing = false;
   const componentId = (value, identity) => createHash('sha256').update(`${value.githubUrl}\n${identity}`).digest('hex').slice(0, 24);
   const storeVersionPath = (store, id, version, outputName = 'out') => path.join(directory, store, id, version + (outputName === 'out' ? '' : `-${outputName}`));
@@ -281,8 +281,32 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
 
   const freshDetection = detection => detection && !detection.error && now() - Date.parse(detection.checkedAt) >= 0 && now() - Date.parse(detection.checkedAt) <= 24 * 60 * 60 * 1000;
 
-  async function plan(body, detection) {
+  const planLifetime = { ui: 15 * 60_000, mcp: 60 * 60_000 };
+  function planRecord(id) {
+    const record = plans.get(id);
+    if (record?.public.status === 'pending' && record.public.expiresAt <= now()) record.public.status = 'expired';
+    return record;
+  }
+  function planStatus(id) {
+    const record = planRecord(id);
+    if (!record) throw new InstallerError('NOT_FOUND', 'Plan not found.');
+    return { ...record.public };
+  }
+  function listPlans() {
+    return [...plans.keys()].map(planStatus).filter(plan => plan.status === 'pending' && plan.source === 'mcp');
+  }
+  function reject(id) {
+    const record = planRecord(id);
+    if (record?.public.source !== 'mcp' || record.public.status !== 'pending') throw new InstallerError('INVALID_PLAN', 'Plan is not pending.');
+    record.public.status = 'rejected';
+    return planStatus(id);
+  }
+
+  async function plan(body, detection, origin = 'ui') {
     if (!body || !['install', 'enable', 'disable', 'uninstall'].includes(body.action)) throw new InstallerError('INVALID_INPUT', 'Invalid installer action.');
+    if (origin === 'mcp' && (body.action !== 'install' || body.recipe || typeof body.subpath !== 'string')) {
+      throw new InstallerError('INVALID_INPUT', 'Choose a skill directory for an install Plan.');
+    }
     const saved = await state();
     let receipt, kind, activationKey;
     if (body.action === 'install') {
@@ -303,10 +327,19 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     const current = await activations(receipt, kind, body.action === 'install' ? saved.receipts : undefined);
     if (body.action === 'install' && receipt.kind === 'cli') await checkCliShadow(receipt, saved.receipts);
     await checkStore(receipt, kind, body.action === 'install');
-    const approved = { id: randomUUID(), action: body.action, componentId: receipt.id, version: receipt.version, expiresAt: now() + 15 * 60 * 1000 };
-    for (const [key, pendingPlan] of pending) if (pendingPlan.public.expiresAt < now()) pending.delete(key);
-    pending.set(approved.id, { public: approved, receipt, activationKey, raw: saved.raw, current });
-    return { ...approved };
+    const id = randomUUID();
+    const { githubUrl, subpath } = receipt.recipe.source;
+    const description = origin === 'mcp'
+      ? `Install ${receipt.name} from ${githubUrl} (${subpath || 'repository root'}) for Codex and Claude.`
+      : `${body.action} ${receipt.name}`;
+    const proposal = { id, link: `/#plan-${id}`, source: origin, status: 'pending', action: body.action, description,
+      componentId: receipt.id, version: receipt.version, expiresAt: now() + planLifetime[origin] };
+    // ponytail: keep recent statuses in memory; add persistence only if Plans must survive restarts.
+    for (const [key, record] of plans) {
+      if (record.public.status !== 'running' && record.public.expiresAt + planLifetime.mcp < now()) plans.delete(key);
+    }
+    plans.set(id, { public: proposal, receipt, activationKey, raw: saved.raw, current });
+    return { ...proposal };
   }
 
   async function checkStore(receipt, kind, installing = false) {
@@ -329,12 +362,23 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
     await kind.createActivation(receipt, target);
   }
 
-  async function execute(id) {
+  async function execute(id, origin = 'ui') {
     if (executing) throw new InstallerError('BUSY', 'Another installer action is running.');
-    const approved = pending.get(id);
-    pending.delete(id);
-    if (!approved || approved.public.expiresAt < now()) throw new InstallerError('INVALID_PLAN', 'Plan expired or already used.');
+    const approved = planRecord(id);
+    if (approved?.public.source !== origin || approved.public.status !== 'pending') throw new InstallerError('INVALID_PLAN', 'Plan expired or already used, or requires a different approval.');
+    approved.public.status = 'running';
     executing = true;
+    try {
+      const result = await applyPlan(approved);
+      approved.public.status = 'done';
+      return result;
+    } catch (error) {
+      approved.public.status = 'failed';
+      throw error;
+    } finally { executing = false; }
+  }
+
+  async function applyPlan(approved) {
     const { receipt, activationKey } = approved;
     const kind = kinds.get(receipt.kind);
     const created = [];
@@ -402,7 +446,7 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
       }
       if (installed) await removeStore(receipt, kind);
       throw error;
-    } finally { executing = false; }
+    }
   }
 
   const agentNames = ['codex', 'claude'];
@@ -620,11 +664,14 @@ export function createInstaller({ directory, home = homedir(), run = promisify(e
   };
 
   const kinds = new Map([['skill', skill], ['cli', cli]]);
-  return { snapshot, plan, execute, unmanaged, inventory, search: github.search, inspect: github.inspect, info: github.info, detect,
-    refreshDetection: async card => {
+  return { snapshot, plan, planStatus, listPlans, reject, execute, unmanaged, inventory, search: github.search, inspect: github.inspect, info: github.info, detect,
+    refreshDetection: async (card, { requireFresh = false } = {}) => {
       if (freshDetection(card.detection)) return card;
       const { detection, latestReleaseAt } = await github.detect(card.githubUrl);
-      if (detection.error) return card;
+      if (detection.error) {
+        if (requireFresh) throw new InstallerError('SOURCE_ERROR', detection.error);
+        return card;
+      }
       return { ...card, detection, ...(latestReleaseAt !== undefined && { latestReleaseAt }) };
     },
   };
