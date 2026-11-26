@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { createServer as createTcpServer } from 'node:net';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -64,9 +67,11 @@ test('chat answers using allowlisted DotCode MCP tools, with server-owned creden
       return response.json();
     };
     const { result: { tools } } = await rpc('tools/list');
-    assert.deepEqual(mcp.enabled_tools, tools.map(tool => tool.name).filter(name => name !== 'list_unmanaged'));
+    assert.deepEqual(tools.map(tool => tool.name), mcp.enabled_tools);
     assert.ok(tools.every(tool => tool.annotations.readOnlyHint));
-    assert.match((await rpc('tools/call', { name: 'execute' })).error.message, /Unknown tool/);
+    for (const name of ['execute', 'list_unmanaged']) {
+      assert.equal((await rpc('tools/call', { name })).error?.code, -32602);
+    }
     const { result } = await rpc('tools/call', { name: 'repo_info', arguments: { githubUrl } });
     return { finalResponse: JSON.parse(result.content[0].text).readme.split('\n').at(-1) };
   } }) }));
@@ -77,8 +82,10 @@ test('chat answers using allowlisted DotCode MCP tools, with server-owned creden
 
 test('Codex bypasses provider proxies for authenticated local MCP', { timeout: 20000 }, async t => {
   const requests = [];
-  const proxy = createServer((req, res) => {
-    requests.push(req.url);
+  const proxy = createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    requests.push({ url: req.url, body: Buffer.concat(chunks).toString() });
     res.writeHead(401).end();
   }).listen(0, '127.0.0.1');
   t.after(() => new Promise(resolve => proxy.close(resolve)));
@@ -117,10 +124,38 @@ test('Codex bypasses provider proxies for authenticated local MCP', { timeout: 2
         } },
       } }),
     }), /401|MCP/);
-    assert.ok(requests.every(url => !url.endsWith('/mcp')), 'the proxy must never receive local MCP requests');
+    assert.ok(requests.every(({ url }) => !url.endsWith('/mcp')), 'the proxy must never receive local MCP requests');
     assert.ok(authenticatedMcp, 'MCP must receive its bearer token directly');
-    if (!noProxy) assert.ok(requests.includes(`${providerUrl}/responses`), 'provider requests should still use the proxy');
+    if (!noProxy) {
+      const request = requests.find(({ url }) => url === `${providerUrl}/responses`);
+      assert.ok(request, 'provider requests should still use the proxy');
+      const { tools } = JSON.parse(request.body);
+      assert.ok(tools.length, 'the real Codex request should advertise tools');
+      assert.doesNotMatch(JSON.stringify(tools.map(({ name, type }) => name ?? type)), /"(?:apply_patch|shell|local_shell|shell_command|exec|exec_command|write_stdin|web_search(?:_preview)?|(?:get|create|update)_goal)"/);
+    }
   }
+});
+
+test('the bundled Linux read-only sandbox blocks writes and network access', { skip: process.platform !== 'linux' }, async t => {
+  const home = await mkdtemp(path.join(tmpdir(), 'dotcode-sandbox-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const server = createTcpServer(socket => socket.end()).listen(0, '127.0.0.1');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  await once(server, 'listening');
+  const sdkRequire = createRequire(import.meta.resolve('@openai/codex-sdk'));
+  const cli = path.join(path.dirname(sdkRequire.resolve('@openai/codex/package.json')), 'bin/codex.js');
+  const probe = `
+    let writeBlocked = false;
+    try { require('node:fs').writeFileSync('sandbox-canary', 'test'); }
+    catch (error) { writeBlocked = ['EROFS', 'EACCES', 'EPERM'].includes(error.code); }
+    const socket = require('node:net').connect(Number(process.argv[1]), '127.0.0.1');
+    socket.on('connect', () => process.exit(1));
+    socket.on('error', error => process.exit(writeBlocked && ['EACCES', 'EPERM'].includes(error.code) ? 42 : 1));
+  `;
+  const child = spawn(process.execPath,
+    [cli, '--sandbox', 'read-only', 'sandbox', '--', process.execPath, '-e', probe, String(server.address().port)],
+    { cwd: home, env: { PATH: process.env.PATH, HOME: home, CODEX_HOME: home }, stdio: 'inherit', timeout: 10000 });
+  assert.deepEqual(await once(child, 'close'), [42, null], 'both sandbox operations must be denied');
 });
 
 test('chat connects to MCP on the bound loopback address, not the request Host', async t => {

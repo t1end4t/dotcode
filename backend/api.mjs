@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import express from 'express';
 import { createInstaller, InstallerError } from './installer.mjs';
 import { githubKey as catalogKey, githubRepo } from './github.mjs';
-import { attachMcp, mcpToken } from './mcp.mjs';
+import { attachMcp, mcpToken, newBearer } from './mcp.mjs';
 import { answerChat } from './chat.mjs';
 
 const textFields = ['name', 'githubUrl', 'action', 'location', 'method', 'configurationNotes', 'version'];
@@ -193,7 +193,9 @@ export function attachApi(app, {
     try { return await call(args); }
     finally { busy = false; }
   });
-  attachMcp(app, { isLocal: isLocalRequest, token, tools: [
+  // Opt in by name on both sides of MCP so the Assistant bearer cannot reach other tools.
+  const assistant = { token: newBearer(), tools: ['search', 'repo_info', 'detect', 'list_components'] };
+  attachMcp(app, { isLocal: isLocalRequest, token, assistant, tools: [
     { name: 'search', description: 'Search GitHub repositories (or inspect one URL / owner/repo) with Detector badges, like DotCode Search.',
       inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
       call: ({ query }) => installer.search(query) },
@@ -242,17 +244,15 @@ export function attachApi(app, {
     res.once('close', () => controller.abort());
     chatRunning = true;
     try {
-      // Opt in by name so future mutating MCP tools are not exposed to this chat.
       const reply = await answerChat({ message: message.trim(), githubUrl: repo, history: history.map(({ role, text }) => ({ role, text })),
-        mcpUrl: `http://${host}:${req.socket.localPort}/mcp`, token: await token,
-        tools: ['search', 'repo_info', 'detect', 'list_components'], signal, createCodex });
+        mcpUrl: `http://${host}:${req.socket.localPort}/mcp`, token: assistant.token, tools: assistant.tools, signal, createCodex });
       if (!res.destroyed) res.json({ reply });
     } catch (error) {
       // SDK errors can contain raw provider responses, URLs or credentials.
       const auth = /\b(?:401|unauthorized|authentication|not logged in|api key)\b/i.test(error.message);
       if (!res.destroyed) res.status(signal.aborted ? 504 : 502).json({ error: signal.aborted
         ? 'Codex took too long to answer. Try again.' : auth
-          ? 'Codex sign-in failed. Run codex login, or check OPENAI_API_KEY.'
+          ? 'Codex sign-in failed. Check OPENAI_API_KEY or sign in with the default file-backed Codex credential store.'
           : 'Could not reach Codex or DotCode MCP. Check the connection and try again.' });
     } finally { chatRunning = false; }
   });

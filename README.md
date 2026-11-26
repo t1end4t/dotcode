@@ -50,16 +50,20 @@ DotCode does not remove it or run its old lifecycle scripts.
 
 Select **Ask assistant** on a Card, or open **Assistant** and include a GitHub
 repository name or URL in your question. The integrated Codex SDK reads repository
-metadata and READMEs through DotCode's read-only MCP tools. Codex runs in a
-read-only sandbox in an empty temporary directory and never asks for approval, so
-its tools cannot edit files, reach the network, or install Components.
+metadata and READMEs through a server-enforced subset of DotCode’s read-only
+MCP tools. The Assistant disables Codex’s shell and code mode and starts in a
+read-only sandbox with network access and approvals disabled. This constrains
+sandboxed commands, not Codex itself: Codex still contacts its provider and
+DotCode MCP. The sandbox is not a filesystem read boundary.
 
-Sign in with `codex login`, or set `OPENAI_API_KEY` in the server environment.
-DotCode uses the bundled Codex binary and your login credentials, and ignores
-`config.toml`, rules, hooks, plugins, memories, and your MCP servers. Codex still
-reads `$CODEX_HOME/AGENTS.md` and your personal skills. Chat history stays
-in the open page; each request sends recent turns to Codex, and reloading clears
-it.
+Set `OPENAI_API_KEY` in the server environment, or sign in with `codex login`
+using Codex’s default file-backed credential store. DotCode’s bundled Codex reads
+`auth.json` from the server’s `CODEX_HOME` (default `~/.codex`). It ignores
+`config.toml`, including any setting that changes the credential store, so a
+keyring-only login is not sufficient. It also ignores rules, hooks, plugins,
+memories, and your MCP servers. Codex still reads `$CODEX_HOME/AGENTS.md` and
+may read personal skills. Chat history stays in the open page; each request
+sends recent turns to Codex, and reloading clears it.
 
 ## Your Workspace
 
@@ -92,7 +96,7 @@ Set environment variables when starting the server. See `.env.example` for basic
 
 **Keep DotCode local.** Do not expose it as an unauthenticated public service, including through a reverse proxy. DotCode listens only on loopback by default. Changing `HOST` changes the listener address; API writes still require a loopback connection, a local `Host`, and a same-origin `Origin` header if sent.
 
-The loopback check uses the immediate socket peer. A reverse proxy that connects to DotCode over loopback is inside that trust boundary: DotCode sees the proxy as the peer even when the original client is remote.
+The loopback check uses the immediate socket peer. A reverse proxy that connects to DotCode over loopback is inside that trust boundary: DotCode sees the proxy as the peer even when the original client is remote. The Assistant’s HTTP route does not authenticate the browser separately; another local OS user can reach it even without the MCP token. Do not run it with provider credentials on a machine shared with untrusted users.
 
 ## Ask an agent over MCP
 

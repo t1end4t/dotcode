@@ -165,6 +165,13 @@ try {
   `);
   sendChat('What does this repository do?');
   command('wait', '--text', 'The README describes a code review library.');
+  assert.equal(evaluate(`
+    const log = document.querySelector('.chat-messages');
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const reply = log.querySelector('.chat-message.assistant p').getBoundingClientRect();
+    const viewport = log.getBoundingClientRect();
+    return reply.height > 0 && reply.top >= viewport.top && reply.bottom <= viewport.bottom;
+  `), true, 'The first reply must be visible inside the conversation viewport');
   assert.deepEqual(evaluate('return window.__chatRequests[0];'), {
     message: 'What does this repository do?', githubUrl: 'https://github.com/example/review-library', history: [],
   });

@@ -29,6 +29,7 @@ export async function answerChat({ message, githubUrl, history, mcpUrl, token, t
       agents: { enabled: false },
       features: {
         shell_tool: false, unified_exec: false, shell_snapshot: false, view_image: false,
+        code_mode: false, code_mode_only: false, goals: false,
         apps: false, hooks: false, plugins: false, browser_use: false, computer_use: false,
         image_generation: false, skill_search: false, skip_host_skill_discovery: true,
         skill_mcp_dependency_install: false, memories: false, multi_agent_v2: false,
@@ -39,8 +40,8 @@ export async function answerChat({ message, githubUrl, history, mcpUrl, token, t
         enabled_tools: tools, startup_timeout_sec: 10, default_tools_approval_mode: 'auto',
       } },
     } });
-    // Code mode can still advertise `exec` and `apply_patch`. `features.shell_tool=false` disables shell execution;
-    // the read-only sandbox with approval `never` blocks writes, not reads.
+    // Disable native shell and code-mode tools above. Read-only with approval `never` is a second
+    // layer against writes; it is not a filesystem read boundary.
     // ponytail: replay a small transcript in a fresh ephemeral thread; no session IDs or on-disk history.
     const thread = codex.startThread({ workingDirectory, sandboxMode: 'read-only', approvalPolicy: 'never',
       webSearchMode: 'disabled', networkAccessEnabled: false, skipGitRepoCheck: true });
